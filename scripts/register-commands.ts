@@ -13,7 +13,7 @@ const resolveRegistrationScope = () => {
   }
 
   if (!env.DEV_GUILD_ID) {
-    throw new Error('DEV_GUILD_ID must be set to register guild commands.');
+    throw new Error('DEV_GUILD_ID must be set to register guild commands. Set it in your .env file or use --global flag.');
   }
 
   return { type: 'guild' as const, guildId: env.DEV_GUILD_ID };

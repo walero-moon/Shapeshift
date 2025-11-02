@@ -1,4 +1,4 @@
-import { Events } from 'discord.js';
+import { Events, Client } from 'discord.js';
 
 import { env } from './config/env';
 import { client } from './discord/client';
@@ -20,8 +20,8 @@ const main = async () => {
 
   await registerInteractionListener(client);
 
-  client.once(Events.ClientReady, (readyClient) => {
-    logger.info(`Logged in as ${readyClient.user.tag} (${readyClient.user.id}).`);
+  client.once(Events.ClientReady, (readyClient: Client) => {
+    logger.info(`Logged in as ${readyClient.user!.tag} (${readyClient.user!.id}).`);
   });
 
   await client.login(env.DISCORD_TOKEN);

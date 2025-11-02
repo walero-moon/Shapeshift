@@ -1,4 +1,4 @@
-import { Client, Events } from 'discord.js';
+import { Client, Events, Interaction } from 'discord.js';
 
 import { logger } from '../../utils/logger';
 import { loadSlashCommands } from '../commands/_loader';
@@ -10,7 +10,7 @@ export const registerInteractionListener = async (client: Client) => {
     loadMessageContextCommands(),
   ]);
 
-  client.on(Events.InteractionCreate, async (interaction) => {
+  client.on(Events.InteractionCreate, async (interaction: Interaction) => {
     try {
       if (interaction.isChatInputCommand()) {
         const command = slashCommands.get(interaction.commandName);
