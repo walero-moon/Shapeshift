@@ -19,4 +19,7 @@ export const logger = {
   warn: (message: string) => {
     console.warn(formatMessage('warn', '\x1b[33m', message));
   },
+  debug: (message: string) => {
+    console.log(formatMessage('debug', '\x1b[35m', message));
+  },
 };
