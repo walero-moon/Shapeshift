@@ -5,6 +5,7 @@ import { db } from '../../db/client';
 import { members, systems, proxiedMessages } from '../../db/schema';
 import { WebhookRegistry } from './WebhookRegistry';
 import { permissionGuard } from '../middleware/permissionGuard';
+import { logService } from './LogService';
 
 export class ProxyService {
     private webhookRegistry = new WebhookRegistry();
@@ -93,6 +94,16 @@ export class ProxyService {
             channelId: channel.id,
             actorUserId,
             memberId,
+        });
+
+        // Log the proxy event
+        await logService.logProxy({
+            guildId: channel.guild.id,
+            actorUserId,
+            memberId,
+            channelId: channel.id,
+            originalMessageId,
+            webhookMessageId: sentMessage.id,
         });
 
         return { messageId: sentMessage.id, channelId: channel.id };

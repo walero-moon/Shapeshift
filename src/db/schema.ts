@@ -40,3 +40,10 @@ export const proxiedMessages = sqliteTable('proxied_messages', {
   originalMessageIdIdx: uniqueIndex('original_message_id_idx').on(table.originalMessageId),
   webhookMessageIdIdx: uniqueIndex('webhook_message_id_idx').on(table.webhookMessageId),
 }));
+
+export const guildConfigs = sqliteTable('guild_configs', {
+  guildId: text('guild_id').primaryKey(),
+  logChannelId: text('log_channel_id'),
+  deleteOriginalOnProxy: integer('delete_original_on_proxy').default(0),
+  tagProxyEnabled: integer('tag_proxy_enabled').default(0),
+});

@@ -10,8 +10,8 @@ import {
 import { logger } from '../../utils/logger';
 
 export interface MessageContextCommand {
-  data: ContextMenuCommandBuilder;
-  execute: (interaction: MessageContextMenuCommandInteraction) => Promise<void>;
+   data: ContextMenuCommandBuilder;
+   execute: (interaction: MessageContextMenuCommandInteraction) => Promise<any>;
 }
 
 const isContextFile = (fileName: string) => {

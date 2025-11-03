@@ -3,6 +3,7 @@ import { WebhookClient, GuildTextBasedChannel, PermissionsBitField } from 'disco
 
 import { db } from '../../db/client';
 import { proxiedMessages } from '../../db/schema';
+import { logService } from './LogService';
 
 /**
  * Service for deleting proxied messages.
@@ -69,6 +70,15 @@ export class DeleteService {
         // Clean up row if deletion succeeded
         if (deleteSuccess) {
             await db.delete(proxiedMessages).where(eq(proxiedMessages.id, row.id));
+
+            // Log the delete event
+            await logService.logDelete({
+                guildId: channel.guild.id,
+                actorUserId,
+                memberId: row.memberId,
+                channelId: channel.id,
+                webhookMessageId: row.webhookMessageId,
+            });
         }
 
         return { ok: true };
