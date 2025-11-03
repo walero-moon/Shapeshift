@@ -3,6 +3,7 @@ import { Events, Client } from 'discord.js';
 import { env } from './config/env';
 import { client } from './discord/client';
 import { registerInteractionListener } from './discord/listeners/interactionCreate';
+import { registerMessageCreateListener } from './discord/listeners/messageCreate';
 import { registerMessageReactionAddListener } from './discord/listeners/messageReactionAdd';
 import { logger } from './utils/logger';
 
@@ -20,6 +21,7 @@ const main = async () => {
   logger.info('Starting Shapeshifter...');
 
   await registerInteractionListener(client);
+  await registerMessageCreateListener(client);
   registerMessageReactionAddListener(client);
 
   client.once(Events.ClientReady, (readyClient: Client) => {

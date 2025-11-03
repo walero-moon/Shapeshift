@@ -97,7 +97,7 @@ export const registerInteractionListener = async (client: Client) => {
             await targetMessage.delete();
             await interaction.editReply({ content: 'Message proxied successfully.', components: [] });
           } catch (error) {
-            await handleInteractionError({ interaction, error, customMessage: `Error: ${error.message}` });
+            await handleInteractionError({ interaction, error, customMessage: `Error: ${(error as Error).message}` });
           }
         }
       } else if (interaction.isModalSubmit()) {

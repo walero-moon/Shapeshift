@@ -24,6 +24,9 @@ describe('handleInteractionError', () => {
             replied: false,
             deferred: false,
             reply: vi.fn(),
+            isCommand: vi.fn().mockReturnValue(true),
+            isMessageComponent: vi.fn().mockReturnValue(false),
+            isModalSubmit: vi.fn().mockReturnValue(false),
         } as any;
     });
 

@@ -12,6 +12,7 @@ const envSchema = z.object({
   CLIENT_ID: z.string().regex(snowflakeRegex, 'Invalid Snowflake ID'),
   DATABASE_PATH: z.string().default('./data/bot.sqlite'),
   DEV_GUILD_ID: z.string().regex(snowflakeRegex, 'Invalid Snowflake ID').optional(),
+  ENABLE_TAG_PROXY: z.coerce.boolean().default(false),
 });
 
 const result = envSchema.safeParse(process.env);
