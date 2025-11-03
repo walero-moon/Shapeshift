@@ -37,6 +37,9 @@ const main = async () => {
     await rest.put(Routes.applicationCommands(env.CLIENT_ID), { body: payload });
     logger.info(`Registered ${payload.length} command(s) globally.`);
   } else {
+    // Clear existing global commands to prevent duplicates
+    await rest.put(Routes.applicationCommands(env.CLIENT_ID), { body: [] });
+    logger.info('Cleared global commands.');
     await rest.put(Routes.applicationGuildCommands(env.CLIENT_ID, scope.guildId), {
       body: payload,
     });

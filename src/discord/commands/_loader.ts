@@ -4,12 +4,13 @@ import path from 'node:path';
 import {
   ChatInputCommandInteraction,
   SlashCommandBuilder,
+  SlashCommandSubcommandsOnlyBuilder,
 } from 'discord.js';
 
 import { logger } from '../../utils/logger';
 
 export interface SlashCommand {
-  data: SlashCommandBuilder;
+  data: SlashCommandBuilder | SlashCommandSubcommandsOnlyBuilder;
   execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
 }
 
@@ -30,6 +31,8 @@ export const loadSlashCommands = async (): Promise<Map<string, SlashCommand>> =>
     .filter((entry) => entry.isFile())
     .map((entry) => entry.name)
     .filter(isCommandFile);
+
+  logger.info(`Found ${commandFiles.length} command files: ${commandFiles.join(', ')}`);
 
   const commands = new Map<string, SlashCommand>();
 
@@ -54,8 +57,16 @@ export const loadSlashCommands = async (): Promise<Map<string, SlashCommand>> =>
       continue;
     }
 
+    logger.info(`Loaded command "${commandName}" from "${fileName}"`);
+
+    if (commands.has(commandName)) {
+      logger.warn(`Duplicate command name "${commandName}" found. Overwriting previous command.`);
+    }
+
     commands.set(commandName, command);
   }
+
+  logger.info(`Loaded ${commands.size} slash commands: ${Array.from(commands.keys()).join(', ')}`);
 
   return commands;
 };

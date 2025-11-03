@@ -20,9 +20,7 @@ describe('WebhookRegistry', () => {
         mockGuild = {
             id: 'guild123',
             members: { me: { id: 'bot123' } },
-            webhooks: {
-                fetch: vi.fn(),
-            },
+            fetchWebhooks: vi.fn(),
         };
 
         mockChannel = {
@@ -42,29 +40,29 @@ describe('WebhookRegistry', () => {
         });
 
         it('should reuse existing bot-owned webhook', async () => {
-            mockGuild.webhooks.fetch.mockResolvedValue([mockWebhook]);
+            mockGuild.fetchWebhooks.mockResolvedValue([mockWebhook]);
 
             const result = await registry.getOrCreate(mockChannel);
             expect(result).toEqual({ id: 'webhook123', token: 'token123' });
-            expect(mockGuild.webhooks.fetch).toHaveBeenCalled();
+            expect(mockGuild.fetchWebhooks).toHaveBeenCalled();
             expect(mockChannel.createWebhook).not.toHaveBeenCalled();
         });
 
         it('should create new webhook if none exists', async () => {
-            mockGuild.webhooks.fetch.mockResolvedValue([]);
+            mockGuild.fetchWebhooks.mockResolvedValue([]);
             mockChannel.createWebhook.mockResolvedValue(mockWebhook);
 
             const result = await registry.getOrCreate(mockChannel);
             expect(result).toEqual({ id: 'webhook123', token: 'token123' });
-            expect(mockGuild.webhooks.fetch).toHaveBeenCalled();
+            expect(mockGuild.fetchWebhooks).toHaveBeenCalled();
             expect(mockChannel.createWebhook).toHaveBeenCalledWith({
-                name: 'PKLite Proxy',
-                reason: 'Created by PKLite for proxying messages'
+                name: 'Shapeshift Proxy',
+                reason: 'Created by Shapeshift for proxying messages'
             });
         });
 
         it('should cache the result', async () => {
-            mockGuild.webhooks.fetch.mockResolvedValue([mockWebhook]);
+            mockGuild.fetchWebhooks.mockResolvedValue([mockWebhook]);
 
             await registry.getOrCreate(mockChannel);
             const cached = (registry as any).cache.get('channel123');

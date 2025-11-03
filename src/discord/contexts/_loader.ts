@@ -34,6 +34,8 @@ export const loadMessageContextCommands = async (): Promise<
     .map((entry) => entry.name)
     .filter(isContextFile);
 
+  logger.info(`Found ${contextFiles.length} context files: ${contextFiles.join(', ')}`);
+
   const contexts = new Map<string, MessageContextCommand>();
 
   for (const fileName of contextFiles) {
@@ -62,8 +64,16 @@ export const loadMessageContextCommands = async (): Promise<
       continue;
     }
 
+    logger.info(`Loaded context command "${name}" from "${fileName}"`);
+
+    if (contexts.has(name)) {
+      logger.warn(`Duplicate context command name "${name}" found. Overwriting previous command.`);
+    }
+
     contexts.set(name, context);
   }
+
+  logger.info(`Loaded ${contexts.size} message context commands: ${Array.from(contexts.keys()).join(', ')}`);
 
   return contexts;
 };

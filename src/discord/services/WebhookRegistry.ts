@@ -1,4 +1,4 @@
-import { GuildTextBasedChannel } from 'discord.js';
+import { GuildTextBasedChannel, TextChannel, NewsChannel } from 'discord.js';
 
 export class WebhookRegistry {
     private cache = new Map<string, { id: string; token: string }>();
@@ -31,7 +31,7 @@ export class WebhookRegistry {
         }
 
         // Create new webhook if none exists
-        const newWebhook = await (channel as any).createWebhook({
+        const newWebhook = await (channel as TextChannel | NewsChannel).createWebhook({
             name: 'Shapeshift Proxy',
             reason: 'Created by Shapeshift for proxying messages'
         });

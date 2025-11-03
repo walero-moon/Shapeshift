@@ -12,6 +12,7 @@ export class ProxyService {
     /**
      * Sends a proxied message using a webhook.
      * @param options - The proxy options
+     * @returns The sent message details
      */
     async sendProxied(options: {
         actorUserId: string;
@@ -20,7 +21,7 @@ export class ProxyService {
         content: string;
         attachments?: any[];
         originalMessageId: string;
-    }): Promise<void> {
+    }): Promise<{ messageId: string; channelId: string }> {
         const { actorUserId, memberId, channel, content, attachments, originalMessageId } = options;
 
         // Validate content presence
@@ -93,5 +94,7 @@ export class ProxyService {
             actorUserId,
             memberId,
         });
+
+        return { messageId: sentMessage.id, channelId: channel.id };
     }
 }

@@ -5,6 +5,27 @@ import { systems, members } from '../../db/schema';
 import { clampUsername } from '../utils/username';
 
 export class MemberService {
+    async getMembers(ownerUserId: string): Promise<typeof members.$inferSelect[]> {
+        // Find the system for the owner
+        const system = await db
+            .select()
+            .from(systems)
+            .where(eq(systems.ownerUserId, ownerUserId))
+            .limit(1);
+
+        if (!system[0]) {
+            return [];
+        }
+
+        // Get all members for the system
+        const memberList = await db
+            .select()
+            .from(members)
+            .where(eq(members.systemId, system[0].id));
+
+        return memberList;
+    }
+
     async addMember(ownerUserId: string, name: string, avatarUrl?: string): Promise<typeof members.$inferSelect> {
         try {
             // Check if owner has a system
