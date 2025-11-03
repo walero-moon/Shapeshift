@@ -33,7 +33,7 @@ export const command: SlashCommand = {
         }
 
         const name = interaction.options.getString('name')?.trim();
-        const avatarUrl = interaction.options.getString('avatar_url');
+        const avatarUrl = interaction.options.getString('avatar_url') || undefined;
         const userId = interaction.user.id;
 
         try {

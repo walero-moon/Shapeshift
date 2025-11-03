@@ -36,4 +36,7 @@ export const proxiedMessages = sqliteTable('proxied_messages', {
     .notNull()
     .references(() => members.id, { onDelete: 'cascade' }),
   createdAt,
-});
+}, (table) => ({
+  originalMessageIdIdx: uniqueIndex('original_message_id_idx').on(table.originalMessageId),
+  webhookMessageIdIdx: uniqueIndex('webhook_message_id_idx').on(table.webhookMessageId),
+}));

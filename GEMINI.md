@@ -15,6 +15,8 @@ A small, robust proxy bot that lets a user:
 * **Respect the originating user’s channel permissions** (no embeds/attachments/mentions the user couldn’t use).
 * **Delete** proxied messages via: message **context menu**, **🗑️ reaction**, and optional **reply keyword**.
 
+**Note**: Do not execute the application after completing tasks; instead, focus solely on ensuring the code lints without errors, builds successfully, and all tests pass.
+
 **Non-Goals (for now)**
 Autoproxy, groups/switches/privacy, edits/reproxy, API/dashboard.
 

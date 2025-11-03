@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { SystemService } from '../../src/discord/services/SystemService';
 
 describe('SystemService', () => {

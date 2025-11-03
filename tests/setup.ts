@@ -1,11 +1,4 @@
-import { beforeAll, beforeEach, vi } from 'vitest';
-
-// Reset call count before each test
-let selectCallCount = 0;
-
-beforeAll(() => {
-    selectCallCount = 0;
-});
+import { beforeEach, vi } from 'vitest';
 
 // Mock better-sqlite3 to avoid native module issues in tests
 vi.mock('better-sqlite3', () => {
@@ -39,31 +32,18 @@ vi.mock('drizzle-orm/better-sqlite3', () => ({
             from: vi.fn(() => ({
                 where: vi.fn(() => ({
                     limit: vi.fn(() => ({
-                        execute: vi.fn(() => {
-                            const result = selectCallCount++ === 0 ? [] : [{ id: 1, ownerUserId: 'user123', displayName: null, createdAt: Date.now() }];
-                            return result;
-                        }),
+                        execute: vi.fn(() => []),
                     })),
                 })),
             })),
         })),
         insert: vi.fn(() => ({
             values: vi.fn(() => ({
-                returning: vi.fn(() => ({
-                    execute: vi.fn(() => {
-                        selectCallCount = 1; // Reset for next test
-                        return [{ id: 1, ownerUserId: 'user123', displayName: null, createdAt: Date.now() }];
-                    }),
-                })),
+                execute: vi.fn(() => {}),
             })),
         })),
     })),
 }));
-
-// Reset call count before each test
-beforeEach(() => {
-    selectCallCount = 0;
-});
 
 // Mock the env module
 vi.mock('../src/config/env', () => ({
