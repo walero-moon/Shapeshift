@@ -6,12 +6,12 @@ import { db } from '../../db/client';
 import { systems } from '../../db/schema';
 import { logger } from '../../utils/logger';
 import { permissionGuard } from '../middleware/permissionGuard';
-import { MemberService } from '../services/MemberService';
+import { FormService } from '../services/FormService';
 import { ProxyService } from '../services/ProxyService';
 import { parseTag } from '../utils/tagParser';
 
 const proxyService = new ProxyService();
-const memberService = new MemberService();
+const formService = new FormService();
 
 export const registerMessageCreateListener = async (client: Client) => {
     client.on(Events.MessageCreate, async (message: Message) => {
@@ -37,7 +37,7 @@ export const registerMessageCreateListener = async (client: Client) => {
             logger.debug(`Processing message: "${message.content}" from ${message.author.username}`);
 
             // Get members for the user
-            const membersList = await memberService.getMembers(message.author.id);
+            const membersList = await formService.getForms(message.author.id);
             const memberNames = membersList.map(m => m.name);
 
             logger.debug(`User has ${membersList.length} members: [${memberNames.join(', ')}]`);

@@ -3,13 +3,13 @@ import { Client, Events, Interaction, MessageFlags } from 'discord.js';
 import { logger } from '../../utils/logger';
 import { loadSlashCommands } from '../commands/_loader';
 import { loadMessageContextCommands } from '../contexts/_loader';
-import { memberAutocomplete } from '../commands/_autocomplete/memberAutocomplete';
-import { MemberService } from '../services/MemberService';
+import { formAutocomplete } from '../commands/_autocomplete/formAutocomplete';
+import { FormService } from '../services/FormService';
 import { ProxyService } from '../services/ProxyService';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { handleInteractionError } from '../utils/errorHandler';
 
-const memberService = new MemberService();
+const formService = new FormService();
 const proxyService = new ProxyService();
 
 export const registerInteractionListener = async (client: Client) => {
@@ -49,7 +49,13 @@ export const registerInteractionListener = async (client: Client) => {
       } else if (interaction.isAutocomplete()) {
         if (interaction.commandName === 'proxy' && interaction.options.getSubcommand() === 'send' && interaction.options.getFocused(true).name === 'member') {
           try {
-            await memberAutocomplete(interaction);
+            await formAutocomplete(interaction);
+          } catch (error) {
+            await handleInteractionError({ interaction, error, silent: true });
+          }
+        } else if (interaction.commandName === 'form' && (interaction.options.getSubcommand() === 'edit' || interaction.options.getSubcommand() === 'delete') && interaction.options.getFocused(true).name === 'form') {
+          try {
+            await formAutocomplete(interaction);
           } catch (error) {
             await handleInteractionError({ interaction, error, silent: true });
           }
@@ -118,7 +124,7 @@ export const registerInteractionListener = async (client: Client) => {
               return;
             }
 
-            const member = await memberService.addMember(interaction.user.id, memberName);
+            const member = await formService.addForm(interaction.user.id, memberName);
 
             const guildMember = await interaction.guild!.members.fetch(interaction.user.id);
             const attachments = targetMessage.attachments.map(a => a);

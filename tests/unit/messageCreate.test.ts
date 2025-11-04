@@ -30,9 +30,9 @@ vi.mock('../../src/db/client', () => ({
     },
 }));
 
-vi.mock('../../src/discord/services/MemberService', () => ({
-    MemberService: class {
-        getMembers = vi.fn(() => Promise.resolve([{ id: 1, name: 'Alice', systemId: 1 }]));
+vi.mock('../../src/discord/services/FormService', () => ({
+    FormService: class {
+        getForms = vi.fn(() => Promise.resolve([{ id: 1, name: 'Alice', systemId: 1 }]));
     },
 }));
 
@@ -94,35 +94,35 @@ describe('registerMessageCreateListener', () => {
         await registerMessageCreateListener(client);
         client.emit(Events.MessageCreate, mockMessage);
         // Should not call any services
-        expect(vi.mocked(await import('../../src/discord/services/MemberService')).MemberService).not.toHaveBeenCalled();
+        expect(vi.mocked(await import('../../src/discord/services/FormService')).FormService).not.toHaveBeenCalled();
     });
 
     it('should ignore DMs', async () => {
         mockMessage.guild = null;
         await registerMessageCreateListener(client);
         client.emit(Events.MessageCreate, mockMessage);
-        expect(vi.mocked(await import('../../src/discord/services/MemberService')).MemberService).not.toHaveBeenCalled();
+        expect(vi.mocked(await import('../../src/discord/services/FormService')).FormService).not.toHaveBeenCalled();
     });
 
     it('should ignore bots', async () => {
         mockMessage.author.bot = true;
         await registerMessageCreateListener(client);
         client.emit(Events.MessageCreate, mockMessage);
-        expect(vi.mocked(await import('../../src/discord/services/MemberService')).MemberService).not.toHaveBeenCalled();
+        expect(vi.mocked(await import('../../src/discord/services/FormService')).FormService).not.toHaveBeenCalled();
     });
 
     it('should ignore webhooks', async () => {
         mockMessage.webhookId = 'webhook123';
         await registerMessageCreateListener(client);
         client.emit(Events.MessageCreate, mockMessage);
-        expect(vi.mocked(await import('../../src/discord/services/MemberService')).MemberService).not.toHaveBeenCalled();
+        expect(vi.mocked(await import('../../src/discord/services/FormService')).FormService).not.toHaveBeenCalled();
     });
 
     it('should ignore non-text channels', async () => {
         mockMessage.channel.isTextBased = vi.fn(() => false);
         await registerMessageCreateListener(client);
         client.emit(Events.MessageCreate, mockMessage);
-        expect(vi.mocked(await import('../../src/discord/services/MemberService')).MemberService).not.toHaveBeenCalled();
+        expect(vi.mocked(await import('../../src/discord/services/FormService')).FormService).not.toHaveBeenCalled();
     });
 
     it('should process valid tags with permission shaping', async () => {
@@ -179,7 +179,7 @@ describe('registerMessageCreateListener', () => {
     });
 
     it('should handle errors gracefully', async () => {
-        const memberServiceMock = vi.mocked(await import('../../src/discord/services/MemberService')).MemberService;
+        const formServiceMock = vi.mocked(await import('../../src/discord/services/FormService')).FormService;
         memberServiceMock.mockImplementation(() => ({
             getMembers: vi.fn(() => Promise.reject(new Error('Test error'))),
         }));

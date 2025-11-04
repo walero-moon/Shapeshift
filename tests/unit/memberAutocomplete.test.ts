@@ -1,23 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AutocompleteInteraction } from 'discord.js';
-import { memberAutocomplete } from '../../src/discord/commands/_autocomplete/memberAutocomplete';
-import { MemberService } from '../../src/discord/services/MemberService';
+import { formAutocomplete } from '../../src/discord/commands/_autocomplete/formAutocomplete';
+import { FormService } from '../../src/discord/services/FormService';
 
-// Mock MemberService
-vi.mock('../../src/discord/services/MemberService', () => ({
-    MemberService: class {
-        getMembers = vi.fn();
+// Mock FormService
+vi.mock('../../src/discord/services/FormService', () => ({
+    FormService: class {
+        getForms = vi.fn();
     },
 }));
 
-describe('memberAutocomplete', () => {
+describe('formAutocomplete', () => {
     let mockInteraction: AutocompleteInteraction;
-    let mockMemberService: any;
+    let mockFormService: any;
 
     beforeEach(() => {
         vi.clearAllMocks();
-        mockMemberService = new MemberService();
-        (MemberService as any).mockClear();
+        mockFormService = new FormService();
+        (FormService as any).mockClear();
 
         mockInteraction = {
             options: {
@@ -34,18 +34,18 @@ describe('memberAutocomplete', () => {
         const focusedOption = { value: 'test' };
         (mockInteraction.options.getFocused as any).mockReturnValue(focusedOption);
 
-        const members = [
-            { id: 1, name: 'TestMember' },
-            { id: 2, name: 'OtherMember' },
+        const forms = [
+            { id: 1, name: 'TestForm' },
+            { id: 2, name: 'OtherForm' },
             { id: 3, name: 'testAlt' },
         ];
-        mockMemberService.getMembers.mockResolvedValue(members);
+        mockFormService.getForms.mockResolvedValue(forms);
 
-        await memberAutocomplete(mockInteraction);
+        await formAutocomplete(mockInteraction);
 
-        expect(mockMemberService.getMembers).toHaveBeenCalledWith('user123');
+        expect(mockFormService.getForms).toHaveBeenCalledWith('user123');
         expect(mockInteraction.respond).toHaveBeenCalledWith([
-            { name: 'TestMember', value: '1' },
+            { name: 'TestForm', value: '1' },
             { name: 'testAlt', value: '3' },
         ]);
     });
@@ -54,16 +54,16 @@ describe('memberAutocomplete', () => {
         const focusedOption = { value: 'TEST' };
         (mockInteraction.options.getFocused as any).mockReturnValue(focusedOption);
 
-        const members = [
-            { id: 1, name: 'testmember' },
-            { id: 2, name: 'OtherMember' },
+        const forms = [
+            { id: 1, name: 'testform' },
+            { id: 2, name: 'OtherForm' },
         ];
-        mockMemberService.getMembers.mockResolvedValue(members);
+        mockFormService.getForms.mockResolvedValue(forms);
 
-        await memberAutocomplete(mockInteraction);
+        await formAutocomplete(mockInteraction);
 
         expect(mockInteraction.respond).toHaveBeenCalledWith([
-            { name: 'testmember', value: '1' },
+            { name: 'testform', value: '1' },
         ]);
     });
 
@@ -71,13 +71,13 @@ describe('memberAutocomplete', () => {
         const focusedOption = { value: '' };
         (mockInteraction.options.getFocused as any).mockReturnValue(focusedOption);
 
-        const members = Array.from({ length: 30 }, (_, i) => ({
+        const forms = Array.from({ length: 30 }, (_, i) => ({
             id: i + 1,
-            name: `Member${i + 1}`,
+            name: `Form${i + 1}`,
         }));
-        mockMemberService.getMembers.mockResolvedValue(members);
+        mockFormService.getForms.mockResolvedValue(forms);
 
-        await memberAutocomplete(mockInteraction);
+        await formAutocomplete(mockInteraction);
 
         const respondedChoices = (mockInteraction.respond as any).mock.calls[0][0];
         expect(respondedChoices).toHaveLength(25);
@@ -85,9 +85,9 @@ describe('memberAutocomplete', () => {
 
     it('should return empty array on error', async () => {
         (mockInteraction.options.getFocused as any).mockReturnValue({ value: 'test' });
-        mockMemberService.getMembers.mockRejectedValue(new Error('Database error'));
+        mockFormService.getForms.mockRejectedValue(new Error('Database error'));
 
-        await memberAutocomplete(mockInteraction);
+        await formAutocomplete(mockInteraction);
 
         expect(mockInteraction.respond).toHaveBeenCalledWith([]);
     });
@@ -96,17 +96,17 @@ describe('memberAutocomplete', () => {
         const focusedOption = { value: '' };
         (mockInteraction.options.getFocused as any).mockReturnValue(focusedOption);
 
-        const members = [
-            { id: 1, name: 'Member1' },
-            { id: 2, name: 'Member2' },
+        const forms = [
+            { id: 1, name: 'Form1' },
+            { id: 2, name: 'Form2' },
         ];
-        mockMemberService.getMembers.mockResolvedValue(members);
+        mockFormService.getForms.mockResolvedValue(forms);
 
-        await memberAutocomplete(mockInteraction);
+        await formAutocomplete(mockInteraction);
 
         expect(mockInteraction.respond).toHaveBeenCalledWith([
-            { name: 'Member1', value: '1' },
-            { name: 'Member2', value: '2' },
+            { name: 'Form1', value: '1' },
+            { name: 'Form2', value: '2' },
         ]);
     });
 });

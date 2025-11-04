@@ -1,24 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MessageContextMenuCommandInteraction, ActionRowBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder } from 'discord.js';
 import { context } from '../../src/discord/contexts/proxyAs';
-import { MemberService } from '../../src/discord/services/MemberService';
+import { FormService } from '../../src/discord/services/FormService';
 
-// Mock MemberService
-vi.mock('../../src/discord/services/MemberService', () => ({
-    MemberService: class {
-        getMembers = vi.fn();
+// Mock FormService
+vi.mock('../../src/discord/services/FormService', () => ({
+    FormService: class {
+        getForms = vi.fn();
     },
 }));
 
 describe('"Proxy as..." context menu', () => {
     let mockInteraction: MessageContextMenuCommandInteraction;
-    let mockMemberService: any;
+    let mockFormService: any;
     let mockTargetMessage: any;
 
     beforeEach(() => {
         vi.clearAllMocks();
-        mockMemberService = new MemberService();
-        (MemberService as any).mockClear();
+        mockFormService = new FormService();
+        (FormService as any).mockClear();
 
         mockTargetMessage = {
             id: 'message123',
@@ -47,23 +47,23 @@ describe('"Proxy as..." context menu', () => {
         });
     });
 
-    it('should show modal when user has no members', async () => {
-        mockMemberService.getMembers.mockResolvedValue([]);
+    it('should show modal when user has no forms', async () => {
+        mockFormService.getForms.mockResolvedValue([]);
 
         await context.execute(mockInteraction);
 
         expect(mockInteraction.showModal).toHaveBeenCalled();
         const modal = mockInteraction.showModal.mock.calls[0][0] as ModalBuilder;
         expect(modal.data.custom_id).toBe('proxy_as_create_member:message123');
-        expect(modal.data.title).toBe('Create Member');
+        expect(modal.data.title).toBe('Create Form');
     });
 
-    it('should show member selector when user has members', async () => {
-        const members = [
-            { id: 1, name: 'Member1' },
-            { id: 2, name: 'Member2' },
+    it('should show form selector when user has forms', async () => {
+        const forms = [
+            { id: 1, name: 'Form1' },
+            { id: 2, name: 'Form2' },
         ];
-        mockMemberService.getMembers.mockResolvedValue(members);
+        mockFormService.getForms.mockResolvedValue(forms);
 
         const mockReplyMessage = {
             createMessageComponentCollector: vi.fn().mockReturnValue({
@@ -84,16 +84,16 @@ describe('"Proxy as..." context menu', () => {
         const row = components[0] as ActionRowBuilder<StringSelectMenuBuilder>;
         const select = row.data.components[0] as StringSelectMenuBuilder;
         expect(select.data.custom_id).toBe('proxy_as_select_member:message123');
-        expect(select.data.placeholder).toBe('Select member to proxy as');
+        expect(select.data.placeholder).toBe('Select form to proxy as');
         expect(select.data.options).toEqual([
-            { label: 'Member1', value: '1' },
-            { label: 'Member2', value: '2' },
+            { label: 'Form1', value: '1' },
+            { label: 'Form2', value: '2' },
         ]);
     });
 
-    it('should set up collector for member selection', async () => {
-        const members = [{ id: 1, name: 'Member1' }];
-        mockMemberService.getMembers.mockResolvedValue(members);
+    it('should set up collector for form selection', async () => {
+        const forms = [{ id: 1, name: 'Form1' }];
+        mockFormService.getForms.mockResolvedValue(forms);
 
         const mockCollector = {
             on: vi.fn(),

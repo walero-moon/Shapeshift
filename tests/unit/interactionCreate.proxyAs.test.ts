@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { StringSelectMenuInteraction, ModalSubmitInteraction, GuildTextBasedChannel, GuildMember, MessageFlags } from 'discord.js';
 import { registerInteractionListener } from '../../src/discord/listeners/interactionCreate';
-import { MemberService } from '../../src/discord/services/MemberService';
+import { FormService } from '../../src/discord/services/FormService';
 import { ProxyService } from '../../src/discord/services/ProxyService';
 import { permissionGuard } from '../../src/discord/middleware/permissionGuard';
 
 // Mock services
-vi.mock('../../src/discord/services/MemberService', () => ({
-    MemberService: class {
-        addMember = vi.fn();
+vi.mock('../../src/discord/services/FormService', () => ({
+    FormService: class {
+        addForm = vi.fn();
     },
 }));
 
@@ -33,7 +33,7 @@ vi.mock('../../src/discord/contexts/_loader', () => ({
 
 describe('interactionCreate - Proxy As functionality', () => {
     let mockClient: any;
-    let mockMemberService: any;
+    let mockFormService: any;
     let mockProxyService: any;
     let mockChannel: GuildTextBasedChannel;
     let mockGuildMember: GuildMember;
@@ -41,9 +41,9 @@ describe('interactionCreate - Proxy As functionality', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        mockMemberService = new MemberService();
+        mockFormService = new FormService();
         mockProxyService = new ProxyService();
-        (MemberService as any).mockClear();
+        (FormService as any).mockClear();
         (ProxyService as any).mockClear();
 
         mockChannel = {
@@ -253,7 +253,7 @@ describe('interactionCreate - Proxy As functionality', () => {
                 files: [],
                 flags: 4,
             });
-            mockMemberService.addMember.mockResolvedValue({ id: 1, name: 'NewMember' });
+            mockFormService.addForm.mockResolvedValue({ id: 1, name: 'NewMember' });
             mockProxyService.sendProxied.mockResolvedValue({
                 channelId: 'channel123',
                 messageId: 'proxied123',
@@ -263,7 +263,7 @@ describe('interactionCreate - Proxy As functionality', () => {
             const handler = mockClient.on.mock.calls[0][1];
             await handler(mockInteraction);
 
-            expect(mockMemberService.addMember).toHaveBeenCalledWith('user123', 'NewMember');
+            expect(mockFormService.addForm).toHaveBeenCalledWith('user123', 'NewMember');
             expect(mockProxyService.sendProxied).toHaveBeenCalledWith({
                 actorUserId: 'user123',
                 memberId: 1,
@@ -275,14 +275,14 @@ describe('interactionCreate - Proxy As functionality', () => {
 
             expect(mockTargetMessage.delete).toHaveBeenCalled();
             expect(mockInteraction.reply).toHaveBeenCalledWith({
-                content: 'Member created and message proxied successfully.',
+                content: 'Form created and message proxied successfully.',
                 flags: MessageFlags.Ephemeral,
             });
         });
 
-        it('should handle member creation errors', async () => {
+        it('should handle form creation errors', async () => {
             mockChannel.messages.fetch.mockResolvedValue(mockTargetMessage);
-            mockMemberService.addMember.mockRejectedValue(new Error('Member creation failed'));
+            mockFormService.addForm.mockRejectedValue(new Error('Form creation failed'));
 
             await registerInteractionListener(mockClient);
             const handler = mockClient.on.mock.calls[0][1];
