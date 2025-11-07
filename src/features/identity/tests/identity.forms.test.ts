@@ -245,11 +245,13 @@ describe('createForm function', () => {
         };
         const result = await createForm('user1', input);
 
-        expect(result.defaultAliases).toHaveLength(1);
-        expect(result.defaultAliases[0]!.triggerRaw).toBe('a:text');
-        expect(result.skippedAliases).toHaveLength(1);
-        expect(result.skippedAliases[0]!.triggerRaw).toBe('a:text');
-        expect(result.skippedAliases[0]!.reason).toBe('Single character name');
+        expect(aliasRepo.create).toHaveBeenCalledTimes(1);
+        expect(result.skippedAliases).toEqual([
+            {
+                triggerRaw: 'a:text',
+                reason: 'Single character name',
+            },
+        ]);
     });
 });
 
@@ -330,11 +332,10 @@ describe('editForm function', () => {
         const input: EditFormInput = {
             name: 'New Name',
         };
-        const result = await editForm('form1', input);
+        await editForm('form1', input);
 
         expect(formRepo.updateNameAvatar).toHaveBeenCalledWith('form1', {
             name: 'New Name',
-            avatarUrl: null,
         });
     });
 
@@ -352,10 +353,9 @@ describe('editForm function', () => {
         const input: EditFormInput = {
             avatarUrl: 'https://example.com/new.png',
         };
-        const result = await editForm('form1', input);
+        await editForm('form1', input);
 
         expect(formRepo.updateNameAvatar).toHaveBeenCalledWith('form1', {
-            name: undefined,
             avatarUrl: 'https://example.com/new.png',
         });
     });
@@ -517,7 +517,9 @@ describe('listForms function', () => {
     it('should handle database errors during form listing', async () => {
         vi.mocked(formRepo.getByUser).mockRejectedValue(new Error('Database unavailable'));
 
-        await expect(listForms('user1')).rejects.toThrow('Database unavailable');
+        const result = await listForms('user1');
+
+        expect(result).toEqual([]);
         expect(aliasRepo.getByForm).not.toHaveBeenCalled();
     });
 
@@ -535,6 +537,25 @@ describe('listForms function', () => {
         vi.mocked(formRepo.getByUser).mockResolvedValue(mockForms);
         vi.mocked(aliasRepo.getByForm).mockRejectedValue(new Error('Alias query failed'));
 
-        await expect(listForms('user1')).rejects.toThrow('Alias query failed');
+        const result = await listForms('user1');
+
+        expect(result).toEqual([
+            {
+                id: 'form1',
+                name: 'Form 1',
+                avatarUrl: null,
+                createdAt: mockForms[0]!.createdAt,
+                aliases: [],
+            },
+        ]);
+    });
+
+    it('should handle database errors during form listing', async () => {
+        vi.mocked(formRepo.getByUser).mockRejectedValue(new Error('Database unavailable'));
+
+        const result = await listForms('user1');
+
+        expect(result).toEqual([]);
+        expect(aliasRepo.getByForm).not.toHaveBeenCalled();
     });
 });

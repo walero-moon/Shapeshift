@@ -10,6 +10,11 @@ vi.mock('../logger', () => ({
     },
 }));
 
+// Mock timers/promises setTimeout
+vi.mock('timers/promises', () => ({
+    setTimeout: vi.fn(),
+}));
+
 describe('retryAsync', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -82,7 +87,8 @@ describe('retryAsync', () => {
 
     it('should respect maxDelay limit', async () => {
         const operation = vi.fn().mockRejectedValue(new Error('Failure'));
-        const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+        const setTimeoutSpy = vi.fn();
+        (vi.mocked(await import('timers/promises')).setTimeout as unknown) = setTimeoutSpy;
 
         await expect(retryAsync(operation, {
             maxAttempts: 5,
@@ -95,12 +101,30 @@ describe('retryAsync', () => {
 
         // Check that delays don't exceed maxDelay
         const calls = setTimeoutSpy.mock.calls;
-        expect(calls[0]?.[1]).toBe(100); // baseDelay
-        expect(calls[1]?.[1]).toBe(200); // min(baseDelay * backoffFactor, maxDelay) = min(300, 200) = 200
-        expect(calls[2]?.[1]).toBe(200); // min(600, 200) = 200
-        expect(calls[3]?.[1]).toBe(200); // min(1800, 200) = 200
+        expect(calls[0]?.[0]).toBe(100); // baseDelay
+        expect(calls[1]?.[0]).toBe(200); // min(baseDelay * backoffFactor, maxDelay) = min(300, 200) = 200
+        expect(calls[2]?.[0]).toBe(200); // min(600, 200) = 200
+        expect(calls[3]?.[0]).toBe(200); // min(1800, 200) = 200
+    });
 
-        setTimeoutSpy.mockRestore();
+    it('should use correct delay calculation', async () => {
+        const operation = vi.fn().mockRejectedValue(new Error('Failure'));
+        const setTimeoutSpy = vi.fn();
+        (vi.mocked(await import('timers/promises')).setTimeout as unknown) = setTimeoutSpy;
+
+        await expect(retryAsync(operation, {
+            maxAttempts: 3,
+            baseDelay: 100,
+            maxDelay: 1000,
+            backoffFactor: 2,
+            component: 'test',
+            operation: 'test-op'
+        })).rejects.toThrow('Failure');
+
+        // Check that delays are calculated correctly
+        const calls = setTimeoutSpy.mock.calls;
+        expect(calls[0]?.[0]).toBe(100); // baseDelay
+        expect(calls[1]?.[0]).toBe(200); // baseDelay * backoffFactor^1
     });
 
     it('should handle non-Error exceptions', async () => {
@@ -201,7 +225,8 @@ describe('retryWithJitter', () => {
 
     it('should apply jitter within expected range', async () => {
         const operation = vi.fn().mockRejectedValue(new Error('Failure'));
-        const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+        const setTimeoutSpy = vi.fn();
+        (vi.mocked(await import('timers/promises')).setTimeout as unknown) = setTimeoutSpy;
 
         // Mock Math.random to return 0.5 for predictable jitter
         const originalRandom = Math.random;
@@ -216,17 +241,17 @@ describe('retryWithJitter', () => {
             operation: 'test-op'
         })).rejects.toThrow('Failure');
 
-        // With jitter = baseDelay * 0.25 * (0.5 * 2 - 1) = 100 * 0.25 * 0 = 0
+        // With random = 0.5, jitter = baseDelay * 0.25 * (0.5 * 2 - 1) = 100 * 0.25 * 0 = 0
         // So delay should be max(0, 100 + 0) = 100
-        expect(setTimeoutSpy.mock.calls[0]?.[1]).toBe(100);
+        expect(setTimeoutSpy.mock.calls[0]?.[0]).toBe(100);
 
         Math.random = originalRandom;
-        setTimeoutSpy.mockRestore();
     });
 
     it('should ensure delay is never negative', async () => {
         const operation = vi.fn().mockRejectedValue(new Error('Failure'));
-        const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+        const setTimeoutSpy = vi.fn();
+        (vi.mocked(await import('timers/promises')).setTimeout as unknown) = setTimeoutSpy;
 
         // Mock Math.random to return 0 (minimum jitter)
         const originalRandom = Math.random;
@@ -243,9 +268,8 @@ describe('retryWithJitter', () => {
 
         // With random = 0, jitter = 100 * 0.25 * (0 * 2 - 1) = 100 * 0.25 * (-1) = -25
         // So delay should be max(0, 100 + (-25)) = 75
-        expect(setTimeoutSpy.mock.calls[0]?.[1]).toBe(75);
+        expect(setTimeoutSpy.mock.calls[0]?.[0]).toBe(75);
 
         Math.random = originalRandom;
-        setTimeoutSpy.mockRestore();
     });
 });

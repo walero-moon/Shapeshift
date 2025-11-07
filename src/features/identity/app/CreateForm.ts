@@ -80,7 +80,7 @@ export async function createForm(userId: string, input: CreateFormInput): Promis
 
             // Create short alias: "<first_letter>:text"
             const firstLetter = name.charAt(0).toLowerCase();
-            if (firstLetter && firstLetter !== name.charAt(0)) {
+            if (name.length > 1 && firstLetter !== name.charAt(0)) {
                 const shortAlias = `${firstLetter}:text`;
                 const shortNorm = await normalizeAlias(shortAlias);
                 const shortKind = getAliasKind(shortNorm);
@@ -104,7 +104,7 @@ export async function createForm(userId: string, input: CreateFormInput): Promis
                         kind: shortKind,
                     });
                 }
-            } else {
+            } else if (name.length === 1) {
                 // First letter is same as full name (single character name), skip short alias
                 skippedAliases.push({
                     triggerRaw: `${firstLetter}:text`,

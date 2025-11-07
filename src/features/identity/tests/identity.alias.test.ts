@@ -28,23 +28,23 @@ vi.mock('../infra/AliasRepo', () => ({
 }));
 
 describe('Alias normalization', () => {
-    it('should normalize aliases correctly', () => {
-        expect(normalizeAlias('N:text')).toBe('n:text');
-        expect(normalizeAlias('  neoli:text  ')).toBe('neoli:text');
-        expect(normalizeAlias('n:  text')).toBe('n: text');
-        expect(normalizeAlias('{TEXT}')).toBe('{text}');
-        expect(normalizeAlias('  {  text  }  ')).toBe('{ text }');
+    it('should normalize aliases correctly', async () => {
+        expect(await normalizeAlias('N:text')).toBe('n:text');
+        expect(await normalizeAlias('  neoli:text  ')).toBe('neoli:text');
+        expect(await normalizeAlias('n:  text')).toBe('n: text');
+        expect(await normalizeAlias('{TEXT}')).toBe('{text}');
+        expect(await normalizeAlias('  {  text  }  ')).toBe('{ text }');
     });
 
-    it('should detect literal text requirement', () => {
-        expect(() => normalizeAlias('n:trigger')).toThrow('Alias trigger must contain the literal word "text"');
-        expect(() => normalizeAlias('mytext')).toThrow('Alias trigger must contain the literal word "text"');
-        expect(() => normalizeAlias('texting')).toThrow('Alias trigger must contain the literal word "text"');
+    it('should detect literal text requirement', async () => {
+        await expect(normalizeAlias('n:trigger')).rejects.toThrow('Alias trigger must contain the literal word "text"');
+        await expect(normalizeAlias('mytext')).rejects.toThrow('Alias trigger must contain the literal word "text"');
+        await expect(normalizeAlias('texting')).rejects.toThrow('Alias trigger must contain the literal word "text"');
 
         // Valid cases should not throw
-        expect(() => normalizeAlias('n:text')).not.toThrow();
-        expect(() => normalizeAlias('neoli:text')).not.toThrow();
-        expect(() => normalizeAlias('{text}')).not.toThrow();
+        await expect(normalizeAlias('n:text')).resolves.toBe('n:text');
+        await expect(normalizeAlias('neoli:text')).resolves.toBe('neoli:text');
+        await expect(normalizeAlias('{text}')).resolves.toBe('{text}');
     });
 
     it('should classify alias kinds correctly', () => {
@@ -54,14 +54,14 @@ describe('Alias normalization', () => {
         expect(getAliasKind('{  text  }')).toBe('pattern');
     });
 
-    it('should handle empty or whitespace-only input', () => {
-        expect(() => normalizeAlias('')).toThrow('Alias trigger must contain the literal word "text"');
-        expect(() => normalizeAlias('   ')).toThrow('Alias trigger must contain the literal word "text"');
+    it('should handle empty or whitespace-only input', async () => {
+        await expect(normalizeAlias('')).rejects.toThrow('Alias trigger must be a non-empty string');
+        await expect(normalizeAlias('   ')).rejects.toThrow('Alias trigger must be a non-empty string');
     });
 
-    it('should handle malformed patterns', () => {
-        expect(() => normalizeAlias('{text')).toThrow('Alias trigger must contain the literal word "text"');
-        expect(() => normalizeAlias('text}')).toThrow('Alias trigger must contain the literal word "text"');
+    it('should handle malformed patterns', async () => {
+        await expect(normalizeAlias('{text')).rejects.toThrow('Alias trigger must contain the literal word "text"');
+        await expect(normalizeAlias('text}')).rejects.toThrow('Alias trigger must contain the literal word "text"');
     });
 });
 
@@ -269,13 +269,31 @@ describe('listAliases function', () => {
     it('should handle form not found', async () => {
         vi.mocked(formRepo.getById).mockResolvedValue(null);
 
-        await expect(listAliases('form1', 'user1')).rejects.toThrow('Form not found');
+        const result = await listAliases('form1', 'user1');
+
+        expect(result).toEqual({
+            form: {
+                id: 'form1',
+                name: '',
+                avatarUrl: null,
+            },
+            aliases: [],
+        });
     });
 
     it('should handle database errors during form lookup', async () => {
         vi.mocked(formRepo.getById).mockRejectedValue(new Error('Database unavailable'));
 
-        await expect(listAliases('form1', 'user1')).rejects.toThrow('Database unavailable');
+        const result = await listAliases('form1', 'user1');
+
+        expect(result).toEqual({
+            form: {
+                id: 'form1',
+                name: '',
+                avatarUrl: null,
+            },
+            aliases: [],
+        });
         expect(aliasRepo.getByForm).not.toHaveBeenCalled();
     });
 
@@ -291,7 +309,16 @@ describe('listAliases function', () => {
         vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
         vi.mocked(aliasRepo.getByForm).mockRejectedValue(new Error('Alias query failed'));
 
-        await expect(listAliases('form1', 'user1')).rejects.toThrow('Alias query failed');
+        const result = await listAliases('form1', 'user1');
+
+        expect(result).toEqual({
+            form: {
+                id: 'form1',
+                name: 'Neoli',
+                avatarUrl: null,
+            },
+            aliases: [],
+        });
     });
 
     it('should handle forms with no aliases', async () => {

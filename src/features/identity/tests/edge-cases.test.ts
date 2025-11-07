@@ -48,8 +48,8 @@ describe('Edge Cases and Input Validation', () => {
             };
             vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
 
-            await expect(addAlias('form1', 'user1', { trigger: '' })).rejects.toThrow('Alias trigger must contain the literal word "text"');
-            await expect(addAlias('form1', 'user1', { trigger: '   ' })).rejects.toThrow('Alias trigger must contain the literal word "text"');
+            await expect(addAlias('form1', 'user1', { trigger: '' })).rejects.toThrow('Alias trigger is required');
+            await expect(addAlias('form1', 'user1', { trigger: '   ' })).rejects.toThrow('Alias trigger is required');
         });
 
         it('should handle empty avatar URL as null', async () => {
@@ -72,7 +72,7 @@ describe('Edge Cases and Input Validation', () => {
                 createdAt: new Date(),
             });
 
-            const result = await createForm('user1', { name: 'Test Form', avatarUrl: '' });
+            await createForm('user1', { name: 'Test Form', avatarUrl: '' });
 
             expect(formRepo.create).toHaveBeenCalledWith('user1', {
                 name: 'Test Form',
@@ -84,20 +84,20 @@ describe('Edge Cases and Input Validation', () => {
     describe('Malformed URLs', () => {
         it('should handle various malformed URL formats', () => {
             // These should all be caught by URL constructor or validation
-            expect(() => new URL('')).toThrow();
-            expect(() => new URL('   ')).toThrow();
-            expect(() => new URL('not-a-url')).toThrow();
-            expect(() => new URL('http://')).toThrow();
-            expect(() => new URL('https://')).toThrow();
-            expect(() => new URL('ftp://example.com')).toThrow();
-            expect(() => new URL('javascript:alert(1)')).toThrow();
+            expect(() => new globalThis.URL('')).toThrow();
+            expect(() => new globalThis.URL('   ')).toThrow();
+            expect(() => new globalThis.URL('not-a-url')).toThrow();
+            expect(() => new globalThis.URL('http://')).toThrow();
+            expect(() => new globalThis.URL('https://')).toThrow();
+            expect(() => new globalThis.URL('ftp://example.com')).toThrow();
+            expect(() => new globalThis.URL('javascript:alert(1)')).toThrow();
         });
 
         it('should handle URLs with special characters', () => {
             // Valid URLs with special characters
-            expect(() => new URL('https://example.com/path with spaces')).not.toThrow();
-            expect(() => new URL('https://example.com/path?query=value&other=test')).not.toThrow();
-            expect(() => new URL('https://example.com/path#fragment')).not.toThrow();
+            expect(() => new globalThis.URL('https://example.com/path with spaces')).not.toThrow();
+            expect(() => new globalThis.URL('https://example.com/path?query=value&other=test')).not.toThrow();
+            expect(() => new globalThis.URL('https://example.com/path#fragment')).not.toThrow();
         });
     });
 
@@ -349,16 +349,16 @@ describe('Edge Cases and Input Validation', () => {
     });
 
     describe('Pattern alias edge cases', () => {
-        it('should handle pattern aliases with various bracket styles', () => {
-            expect(normalizeAlias('{text}')).toBe('{text}');
-            expect(normalizeAlias('{ text }')).toBe('{ text }');
-            expect(normalizeAlias('{TEXT}')).toBe('{text}');
+        it('should handle pattern aliases with various bracket styles', async () => {
+            expect(await normalizeAlias('{text}')).toBe('{text}');
+            expect(await normalizeAlias('{ text }')).toBe('{ text }');
+            expect(await normalizeAlias('{TEXT}')).toBe('{text}');
         });
 
-        it('should reject malformed pattern aliases', () => {
-            expect(() => normalizeAlias('{text')).toThrow('Alias trigger must contain the literal word "text"');
-            expect(() => normalizeAlias('text}')).toThrow('Alias trigger must contain the literal word "text"');
-            expect(() => normalizeAlias('{}')).toThrow('Alias trigger must contain the literal word "text"');
+        it('should reject malformed pattern aliases', async () => {
+            await expect(normalizeAlias('{text')).rejects.toThrow('Alias trigger must contain the literal word "text"');
+            await expect(normalizeAlias('text}')).rejects.toThrow('Alias trigger must contain the literal word "text"');
+            await expect(normalizeAlias('{}')).rejects.toThrow('Alias trigger must contain the literal word "text"');
         });
     });
 });

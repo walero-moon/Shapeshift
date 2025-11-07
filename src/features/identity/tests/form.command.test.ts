@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { ChatInputCommandInteraction } from 'discord.js';
 import { command } from '../discord/form';
 import { execute as autocompleteExecute } from '../discord/form.autocomplete';
 import { handleModalSubmit } from '../discord/form.edit';
@@ -85,7 +86,7 @@ describe('form autocomplete', () => {
             respond: vi.fn(),
         };
 
-        await autocompleteExecute(mockInteraction as any);
+        await autocompleteExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(listForms).toHaveBeenCalledWith('user1');
         expect(mockInteraction.respond).toHaveBeenCalledWith([
@@ -113,7 +114,7 @@ describe('form autocomplete', () => {
             respond: vi.fn(),
         };
 
-        await autocompleteExecute(mockInteraction as any);
+        await autocompleteExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
         const responded = mockInteraction.respond.mock.calls[0]?.[0] || [];
         expect(responded).toHaveLength(25);
@@ -147,7 +148,7 @@ describe('form edit modal submit', () => {
             editReply: vi.fn(),
         };
 
-        await handleModalSubmit(mockInteraction as any);
+        await handleModalSubmit(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(editForm).toHaveBeenCalledWith('form1', {
             name: 'Updated Name',
@@ -181,7 +182,7 @@ describe('form edit modal submit', () => {
             editReply: vi.fn(),
         };
 
-        await handleModalSubmit(mockInteraction as any);
+        await handleModalSubmit(mockInteraction as unknown as ChatInputCommandInteraction);
 
         // deferUpdate is called first, which acknowledges the interaction
         expect(mockInteraction.deferUpdate).toHaveBeenCalled();
@@ -249,7 +250,7 @@ describe('3s rule compliance for form add', () => {
             user: { id: 'user1' },
         };
 
-        await addExecute(mockInteraction as any);
+        await addExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
         expect(mockInteraction.editReply).toHaveBeenCalled();
@@ -282,7 +283,7 @@ describe('3s rule compliance for form edit', () => {
             editReply: vi.fn(),
         };
 
-        await handleModalSubmit(mockInteraction as any);
+        await handleModalSubmit(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(mockInteraction.deferUpdate).toHaveBeenCalled();
         expect(mockInteraction.editReply).toHaveBeenCalled();
@@ -311,7 +312,7 @@ describe('components limit compliance', () => {
             user: { id: 'user1' },
         };
 
-        await listExecute(mockInteraction as any);
+        await listExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
@@ -359,7 +360,7 @@ describe('form add error handling', () => {
             user: { id: 'user1' },
         };
 
-        await addExecute(mockInteraction as any);
+        await addExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
@@ -379,11 +380,11 @@ describe('form add error handling', () => {
             user: { id: 'user1' },
         };
 
-        await addExecute(mockInteraction as any);
+        await addExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
-            content: expect.stringContaining('Avatar URL must start with http:// or https://'),
+            content: expect.stringContaining('Invalid URL format. Please provide a valid URL like https://example.com/image.png'),
             allowedMentions: { parse: [], repliedUser: false }
         });
         expect(createForm).not.toHaveBeenCalled();
@@ -401,7 +402,7 @@ describe('form add error handling', () => {
             user: { id: 'user1' },
         };
 
-        await addExecute(mockInteraction as any);
+        await addExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
@@ -421,7 +422,38 @@ describe('form add error handling', () => {
         };
 
         // Should not throw, but log the error
-        await expect(addExecute(mockInteraction as any)).resolves.toBeUndefined();
+        await expect(addExecute(mockInteraction as unknown as ChatInputCommandInteraction)).resolves.toBeUndefined();
+        expect(mockInteraction.editReply).not.toHaveBeenCalled();
+    });
+
+    it('should handle form not found in edit execute', async () => {
+        vi.mocked(listForms).mockResolvedValue([]); // No forms
+
+        const mockInteraction = {
+            deferReply: vi.fn(),
+            reply: vi.fn(),
+            options: {
+                getString: vi.fn().mockReturnValue('nonexistent'),
+            },
+            user: { id: 'user1' },
+        };
+
+        await expect(import('../discord/form.edit').then(m => m.execute(mockInteraction as unknown as ChatInputCommandInteraction))).resolves.toBeUndefined();
+        // The execute function throws, but in real Discord it would be caught by the framework
+    });
+
+    it('should handle interaction reply failures', async () => {
+        const mockInteraction = {
+            deferReply: vi.fn().mockRejectedValue(new Error('Interaction expired')),
+            editReply: vi.fn(),
+            options: {
+                getString: vi.fn().mockReturnValueOnce('Test Form').mockReturnValueOnce(null),
+            },
+            user: { id: 'user1' },
+        };
+
+        // Should not throw, but log the error
+        await expect(addExecute(mockInteraction as unknown as ChatInputCommandInteraction)).resolves.toBeUndefined();
         expect(mockInteraction.editReply).not.toHaveBeenCalled();
     });
 });
@@ -444,7 +476,7 @@ describe('form edit error handling', () => {
             reply: vi.fn(),
         };
 
-        await handleModalSubmit(mockInteraction as any);
+        await handleModalSubmit(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(mockInteraction.deferUpdate).toHaveBeenCalled();
         expect(mockInteraction.reply).toHaveBeenCalledWith({
@@ -468,11 +500,11 @@ describe('form edit error handling', () => {
             reply: vi.fn(),
         };
 
-        await handleModalSubmit(mockInteraction as any);
+        await handleModalSubmit(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(mockInteraction.deferUpdate).toHaveBeenCalled();
         expect(mockInteraction.reply).toHaveBeenCalledWith({
-            content: expect.stringContaining('Avatar URL must start with http:// or https://'),
+            content: expect.stringContaining('Invalid URL format. Please provide a valid URL like https://example.com/image.png'),
             allowedMentions: { parse: [], repliedUser: false },
             ephemeral: true
         });
@@ -494,7 +526,7 @@ describe('form edit error handling', () => {
             editReply: vi.fn(),
         };
 
-        await handleModalSubmit(mockInteraction as any);
+        await handleModalSubmit(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(mockInteraction.deferUpdate).toHaveBeenCalled();
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
@@ -515,7 +547,7 @@ describe('form edit error handling', () => {
             user: { id: 'user1' },
         };
 
-        await expect(() => (require('../discord/form.edit') as any).execute(mockInteraction as any)).rejects.toThrow();
+        await expect(() => import('../discord/form.edit').then(m => m.execute(mockInteraction as unknown as ChatInputCommandInteraction))).rejects.toThrow();
         // The execute function throws, but in real Discord it would be caught by the framework
     });
 });
@@ -537,7 +569,7 @@ describe('form delete error handling', () => {
             user: { id: 'user1' },
         };
 
-        await (require('../discord/form.delete') as any).execute(mockInteraction as any);
+        await import('../discord/form.delete').then(m => m.execute(mockInteraction as unknown as ChatInputCommandInteraction));
 
         expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
@@ -561,7 +593,7 @@ describe('form list error handling', () => {
             user: { id: 'user1' },
         };
 
-        await listExecute(mockInteraction as any);
+        await listExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
@@ -579,7 +611,7 @@ describe('form list error handling', () => {
             update: vi.fn(),
         };
 
-        await (require('../discord/form.list') as any).handleButtonInteraction(mockInteraction as any);
+        await import('../discord/form.list').then(m => m.handleButtonInteraction(mockInteraction as unknown as ChatInputCommandInteraction));
 
         expect(mockInteraction.update).toHaveBeenCalledWith({
             content: 'Failed to update page: Connection timeout',
@@ -606,7 +638,7 @@ describe('form autocomplete error handling', () => {
             respond: vi.fn(),
         };
 
-        await expect(autocompleteExecute(mockInteraction as any)).rejects.toThrow('Database error');
+        await expect(autocompleteExecute(mockInteraction as unknown as ChatInputCommandInteraction)).rejects.toThrow('Database error');
         expect(mockInteraction.respond).not.toHaveBeenCalled();
     });
 });

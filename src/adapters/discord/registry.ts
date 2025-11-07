@@ -9,8 +9,8 @@ export interface Command {
         name: string;
         toJSON(): unknown;
     };
-    execute(interaction: CommandInteraction): Promise<any>;
-    autocomplete?: (interaction: AutocompleteInteraction) => Promise<any>;
+    execute(interaction: CommandInteraction): Promise<void>;
+    autocomplete?: (interaction: AutocompleteInteraction) => Promise<void>;
 }
 
 export class CommandRegistry {
@@ -32,15 +32,15 @@ export class CommandRegistry {
         this.commands.delete(name);
     }
 
-    registerAutocomplete(commandName: string, handler: (interaction: AutocompleteInteraction) => Promise<any>) {
+    registerAutocomplete(commandName: string, handler: (interaction: AutocompleteInteraction) => Promise<void>) {
         this.autocompleteHandlers.set(commandName, handler);
     }
 
-    registerButton(prefix: string, handler: (interaction: ButtonInteraction) => Promise<any>) {
+    registerButton(prefix: string, handler: (interaction: ButtonInteraction) => Promise<void>) {
         this.buttonHandlers.set(prefix, handler);
     }
 
-    registerModal(prefix: string, handler: (interaction: ModalSubmitInteraction) => Promise<any>) {
+    registerModal(prefix: string, handler: (interaction: ModalSubmitInteraction) => Promise<void>) {
         this.modalHandlers.set(prefix, handler);
     }
 
@@ -89,7 +89,11 @@ export const registry = new CommandRegistry();
 import { execute as formAutocompleteExecute } from '../../features/identity/discord/form.autocomplete';
 import { handleButtonInteraction as formListHandleButton } from '../../features/identity/discord/form.list';
 import { handleModalSubmit as formEditHandleModal } from '../../features/identity/discord/form.edit';
+import { execute as aliasAutocompleteExecute } from '../../features/identity/discord/alias.autocomplete';
+import { handleButtonInteraction as aliasListHandleButton } from '../../features/identity/discord/alias.list';
 
 registry.registerAutocomplete('form', formAutocompleteExecute);
 registry.registerButton('form_list', formListHandleButton);
 registry.registerModal('edit_form', formEditHandleModal);
+registry.registerAutocomplete('alias', aliasAutocompleteExecute);
+registry.registerButton('alias_list', aliasListHandleButton);

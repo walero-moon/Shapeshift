@@ -6,9 +6,10 @@ import log from './shared/utils/logger';
 
 // Register commands with the registry
 import { command as formCommand } from './features/identity/discord/form';
+import { command as aliasCommand } from './features/identity/discord/alias';
 
-// Register commands with the registry
 registry.registerCommand(formCommand);
+registry.registerCommand(aliasCommand);
 registry.registerCommand(pingCommand);
 
 // Enhanced ready event with comprehensive logging

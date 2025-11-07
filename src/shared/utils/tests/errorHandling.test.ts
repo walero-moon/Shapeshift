@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { ChatInputCommandInteraction } from 'discord.js';
 import {
     handleInteractionError,
     wrapAsync,
@@ -29,7 +30,7 @@ describe('handleInteractionError', () => {
             editReply: vi.fn().mockResolvedValue(undefined),
         };
 
-        await handleInteractionError(mockInteraction as any, new Error('Test error'), {
+        await handleInteractionError(mockInteraction as unknown as ChatInputCommandInteraction, new Error('Test error'), {
             component: 'test',
             userId: 'user1',
             interactionId: 'int1'
@@ -49,7 +50,7 @@ describe('handleInteractionError', () => {
             editReply: vi.fn().mockResolvedValue(undefined),
         };
 
-        await handleInteractionError(mockInteraction as any, new Error('Test error'), {
+        await handleInteractionError(mockInteraction as unknown as ChatInputCommandInteraction, new Error('Test error'), {
             component: 'test',
             userId: 'user1',
             interactionId: 'int1'
@@ -68,7 +69,7 @@ describe('handleInteractionError', () => {
             reply: vi.fn().mockResolvedValue(undefined),
         };
 
-        await handleInteractionError(mockInteraction as any, new Error('Test error'), {
+        await handleInteractionError(mockInteraction as unknown as ChatInputCommandInteraction, new Error('Test error'), {
             component: 'test',
             userId: 'user1',
             interactionId: 'int1'
@@ -88,7 +89,7 @@ describe('handleInteractionError', () => {
             reply: vi.fn().mockResolvedValue(undefined),
         };
 
-        await handleInteractionError(mockInteraction as any, new Error('Test error'), {
+        await handleInteractionError(mockInteraction as unknown as ChatInputCommandInteraction, new Error('Test error'), {
             component: 'test',
             userId: 'user1',
             interactionId: 'int1'
@@ -108,7 +109,7 @@ describe('handleInteractionError', () => {
             reply: vi.fn().mockRejectedValue(new Error('Response failed')),
         };
 
-        await expect(handleInteractionError(mockInteraction as any, new Error('Test error'), {
+        await expect(handleInteractionError(mockInteraction as unknown as ChatInputCommandInteraction, new Error('Test error'), {
             component: 'test',
             userId: 'user1',
             interactionId: 'int1'
@@ -215,8 +216,16 @@ describe('validateUrl', () => {
         const result = validateUrl('https://', { component: 'test' });
 
         expect(result.isValid).toBe(false);
-        expect(result.errorMessage).toContain('Avatar URL must include a valid domain name');
-        expect(log.warn).toHaveBeenCalledWith('URL validation failed: no hostname', expect.any(Object));
+        expect(result.errorMessage).toContain('Invalid URL format');
+        expect(log.warn).toHaveBeenCalledWith('URL validation failed: parse error', expect.any(Object));
+    });
+
+    it('should reject URLs without hostname - edge case', () => {
+        const result = validateUrl('https:///', { component: 'test' });
+
+        expect(result.isValid).toBe(false);
+        expect(result.errorMessage).toContain('Invalid URL format');
+        expect(log.warn).toHaveBeenCalledWith('URL validation failed: parse error', expect.any(Object));
     });
 });
 

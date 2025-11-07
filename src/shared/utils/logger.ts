@@ -37,7 +37,7 @@ export interface LogContext {
   interactionId?: string;
   route?: string;
   status?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface Logger {

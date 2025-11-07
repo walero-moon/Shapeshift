@@ -1,4 +1,4 @@
-import { getDatabase } from './client';
+import { db } from './client';
 import { sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 import log from '../utils/logger';
@@ -34,18 +34,9 @@ async function detectUuidv7Availability(): Promise<boolean> {
  */
 async function checkUuidv7Function(): Promise<boolean> {
     try {
-        const dbInstance = await getDatabase();
-        if (!dbInstance) {
-            log.warn('Database not available for UUIDv7 check, falling back to application generation', {
-                component: 'uuid-detection',
-                status: 'degraded_mode'
-            });
-            return false;
-        }
-
         // Try to call the uuidv7() function and see if it exists
-        const result = await dbInstance.execute(sql`SELECT uuidv7()`);
-        return (result as any).rows.length > 0;
+        const result = await db.execute(sql`SELECT uuidv7()`);
+        return (result as { rows: unknown[] }).rows.length > 0;
     } catch (error) {
         // If the function doesn't exist, it will throw an error
         log.error('Failed to check UUIDv7 function availability', {
@@ -66,20 +57,11 @@ export async function generateUuidv7(): Promise<string> {
 
     if (dbHasUuidv7) {
         try {
-            const dbInstance = await getDatabase();
-            if (!dbInstance) {
-                log.warn('Database not available for UUIDv7 generation, falling back to application generation', {
-                    component: 'uuid-detection',
-                    status: 'degraded_mode'
-                });
-                return uuidv7();
-            }
-
             // Try to generate from database with retry
             const result = await retryAsync(
                 async () => {
-                    const queryResult = await dbInstance.execute(sql`SELECT uuidv7() as id`);
-                    const rows = (queryResult as any).rows;
+                    const queryResult = await db.execute(sql`SELECT uuidv7() as id`);
+                    const rows = (queryResult as unknown as { rows: { id: string }[] }).rows;
                     if (rows.length > 0 && rows[0].id) {
                         return rows[0].id as string;
                     }
