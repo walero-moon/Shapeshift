@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../../../shared/db/client';
 import { forms } from '../../../shared/db/schema';
 import { generateUuidv7OrUndefined } from '../../../shared/db/uuidDetection';
+import { log } from '../../../shared/utils/logger';
 
 export interface CreateFormData {
   name: string;
@@ -49,23 +50,37 @@ export class DrizzleFormRepo implements FormRepo {
       insertData.id = id;
     }
 
-    const result = await db.insert(forms).values(insertData as typeof forms.$inferInsert).returning();
-
-    const form = result[0];
-    if (!form) {
-      throw new Error('Failed to create form');
+    try {
+      const result = await db.insert(forms).values(insertData as typeof forms.$inferInsert).returning();
+      const form = result[0];
+      if (!form) {
+        throw new Error('Failed to create form');
+      }
+      return form;
+    } catch (error) {
+      log.error('Failed to create form', { component: 'identity', userId, status: 'database_error', error });
+      throw error;
     }
-    return form;
   }
 
   async getById(id: string): Promise<Form | null> {
-    const result = await db.select().from(forms).where(eq(forms.id, id));
-    return result[0] || null;
+    try {
+      const result = await db.select().from(forms).where(eq(forms.id, id));
+      return result[0] || null;
+    } catch (error) {
+      log.error('Failed to get form by ID', { component: 'identity', status: 'database_error', error });
+      throw error;
+    }
   }
 
   async getByUser(userId: string): Promise<Form[]> {
-    const result = await db.select().from(forms).where(eq(forms.userId, userId));
-    return result;
+    try {
+      const result = await db.select().from(forms).where(eq(forms.userId, userId));
+      return result;
+    } catch (error) {
+      log.error('Failed to get forms by user', { component: 'identity', userId, status: 'database_error', error });
+      throw error;
+    }
   }
 
   async updateNameAvatar(id: string, data: Partial<CreateFormData>): Promise<Form> {
@@ -86,20 +101,29 @@ export class DrizzleFormRepo implements FormRepo {
       throw new Error('No fields to update');
     }
 
-    const result = await db.update(forms)
-      .set(updateData)
-      .where(eq(forms.id, id))
-      .returning();
-
-    const form = result[0];
-    if (!form) {
-      throw new Error('Form not found');
+    try {
+      const result = await db.update(forms)
+        .set(updateData)
+        .where(eq(forms.id, id))
+        .returning();
+      const form = result[0];
+      if (!form) {
+        throw new Error('Form not found');
+      }
+      return form;
+    } catch (error) {
+      log.error('Failed to update form', { component: 'identity', status: 'database_error', error });
+      throw error;
     }
-    return form;
   }
 
   async delete(id: string): Promise<void> {
-    await db.delete(forms).where(eq(forms.id, id));
+    try {
+      await db.delete(forms).where(eq(forms.id, id));
+    } catch (error) {
+      log.error('Failed to delete form', { component: 'identity', status: 'database_error', error });
+      throw error;
+    }
   }
 }
 

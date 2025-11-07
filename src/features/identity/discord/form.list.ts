@@ -8,6 +8,7 @@ import {
 import { listForms } from '../app/ListForms';
 import { DEFAULT_ALLOWED_MENTIONS } from '../../../shared/utils/allowedMentions';
 import { createPaginationComponents, parsePageFromCustomId, calculatePagination } from '../../../shared/utils/pagination';
+import { handleInteractionError } from '../../../shared/utils/errorHandling';
 import log from '../../../shared/utils/logger';
 
 const FORMS_PER_PAGE = 5;
@@ -16,17 +17,18 @@ export const data = new SlashCommandSubcommandBuilder()
     .setName('list')
     .setDescription('List all your forms');
 
-export async function execute(interaction: ChatInputCommandInteraction) {
+export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
         const forms = await listForms(interaction.user.id);
 
         if (forms.length === 0) {
-            return interaction.editReply({
+            await interaction.editReply({
                 content: 'You have no forms yet. Create one with `/form add`',
                 allowedMentions: DEFAULT_ALLOWED_MENTIONS
             });
+            return;
         }
 
         const { totalPages, currentPage } = calculatePagination(forms.length, FORMS_PER_PAGE);
@@ -37,28 +39,23 @@ export async function execute(interaction: ChatInputCommandInteraction) {
             customIdPrefix: 'form_list'
         });
 
-        return interaction.editReply({
+        await interaction.editReply({
             embeds: [embed],
             components,
             allowedMentions: DEFAULT_ALLOWED_MENTIONS
         });
     } catch (error) {
-        log.error('Error listing forms', {
+        await handleInteractionError(interaction, error, {
             component: 'identity',
             userId: interaction.user.id,
             guildId: interaction.guild?.id || undefined,
-            error: error instanceof Error ? error.message : String(error),
-            status: 'error'
-        });
-        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
-        return interaction.editReply({
-            content: `Failed to list forms: ${errorMessage}`,
-            allowedMentions: DEFAULT_ALLOWED_MENTIONS
+            channelId: interaction.channel?.id || undefined,
+            interactionId: interaction.id
         });
     }
 }
 
-export async function handleButtonInteraction(interaction: ButtonInteraction) {
+export async function handleButtonInteraction(interaction: ButtonInteraction): Promise<void> {
     const page = parsePageFromCustomId(interaction.customId);
     if (page === null) return;
 
@@ -75,21 +72,23 @@ export async function handleButtonInteraction(interaction: ButtonInteraction) {
             customIdPrefix: 'form_list'
         });
 
-        return interaction.update({
+        await interaction.update({
             embeds: [embed],
-            components,
-            allowedMentions: DEFAULT_ALLOWED_MENTIONS
+            components
         });
     } catch (error) {
+        // For button interactions, handle errors manually since handleInteractionError expects deferred interactions
         log.error('Error handling form list pagination', {
             component: 'identity',
             userId: interaction.user.id,
             guildId: interaction.guild?.id,
+            channelId: interaction.channel?.id,
+            interactionId: interaction.id,
             error: error instanceof Error ? error.message : String(error),
             status: 'error'
         });
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
-        return interaction.update({
+        await interaction.update({
             content: `Failed to update page: ${errorMessage}`,
             embeds: [],
             components: [],

@@ -1,7 +1,7 @@
 import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
 import { deleteForm } from '../app/DeleteForm';
 import { DEFAULT_ALLOWED_MENTIONS } from '../../../shared/utils/allowedMentions';
-import log from '../../../shared/utils/logger';
+import { handleInteractionError } from '../../../shared/utils/errorHandling';
 
 export const data = new SlashCommandSubcommandBuilder()
     .setName('delete')
@@ -12,7 +12,7 @@ export const data = new SlashCommandSubcommandBuilder()
             .setRequired(true)
             .setAutocomplete(true));
 
-export async function execute(interaction: ChatInputCommandInteraction) {
+export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const formId = interaction.options.getString('form', true);
@@ -20,22 +20,17 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     try {
         await deleteForm(formId);
 
-        return interaction.editReply({
+        await interaction.editReply({
             content: '✅ Form deleted successfully.',
             allowedMentions: DEFAULT_ALLOWED_MENTIONS
         });
     } catch (error) {
-        log.error('Error deleting form', {
+        await handleInteractionError(interaction, error, {
             component: 'identity',
             userId: interaction.user.id,
-            guildId: interaction.guild?.id || undefined,
-            error: error instanceof Error ? error.message : String(error),
-            status: 'error'
-        });
-        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
-        return interaction.editReply({
-            content: `Failed to delete form: ${errorMessage}`,
-            allowedMentions: DEFAULT_ALLOWED_MENTIONS
+            guildId: interaction.guild?.id,
+            channelId: interaction.channel?.id,
+            interactionId: interaction.id
         });
     }
 }

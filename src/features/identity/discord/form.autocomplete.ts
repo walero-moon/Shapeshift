@@ -1,6 +1,5 @@
 import { AutocompleteInteraction } from 'discord.js';
 import { listForms } from '../app/ListForms';
-import log from '../../../shared/utils/logger';
 
 export async function execute(interaction: AutocompleteInteraction) {
     const focusedOption = interaction.options.getFocused(true);
@@ -23,10 +22,12 @@ export async function execute(interaction: AutocompleteInteraction) {
 
         return interaction.respond(filtered);
     } catch (error) {
-        log.error('Error in form autocomplete', {
+        // For autocomplete, we can't use handleInteractionError as it expects reply/editReply methods
+        // Instead, log the error and respond with empty array
+        console.error('Error in form autocomplete', {
             component: 'identity',
             userId: interaction.user.id,
-            guildId: interaction.guild?.id || undefined,
+            guildId: interaction.guild?.id,
             error: error instanceof Error ? error.message : String(error),
             status: 'error'
         });

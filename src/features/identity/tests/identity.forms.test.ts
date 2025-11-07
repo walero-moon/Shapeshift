@@ -184,6 +184,73 @@ describe('createForm function', () => {
             'Form name is required'
         );
     });
+
+    it('should handle database errors during form creation', async () => {
+        vi.mocked(formRepo.create).mockRejectedValue(new Error('Database connection failed'));
+
+        const input: CreateFormInput = {
+            name: 'Test Form',
+            avatarUrl: 'https://example.com/avatar.png',
+        };
+
+        await expect(createForm('user1', input)).rejects.toThrow('Database connection failed');
+        expect(aliasRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('should handle alias creation errors and cleanup form', async () => {
+        const mockForm = {
+            id: 'form1',
+            userId: 'user1',
+            name: 'Test Form',
+            avatarUrl: null,
+            createdAt: new Date(),
+        };
+        vi.mocked(formRepo.create).mockResolvedValue(mockForm);
+        vi.mocked(aliasRepo.findCollision).mockResolvedValue(null);
+        vi.mocked(aliasRepo.create).mockRejectedValue(new Error('Alias creation failed'));
+        vi.mocked(formRepo.delete).mockResolvedValue(undefined);
+
+        const input: CreateFormInput = {
+            name: 'Test Form',
+        };
+
+        await expect(createForm('user1', input)).rejects.toThrow('Alias creation failed');
+        expect(formRepo.delete).toHaveBeenCalledWith('form1');
+    });
+
+    it('should handle single character names by skipping short alias', async () => {
+        const mockForm = {
+            id: 'form1',
+            userId: 'user1',
+            name: 'A',
+            avatarUrl: null,
+            createdAt: new Date(),
+        };
+        vi.mocked(formRepo.create).mockResolvedValue(mockForm);
+        vi.mocked(aliasRepo.findCollision).mockResolvedValue(null);
+
+        const mockAlias = {
+            id: 'alias1',
+            userId: 'user1',
+            formId: 'form1',
+            triggerRaw: 'a:text',
+            triggerNorm: 'a:text',
+            kind: 'prefix' as const,
+            createdAt: new Date(),
+        };
+        vi.mocked(aliasRepo.create).mockResolvedValue(mockAlias);
+
+        const input: CreateFormInput = {
+            name: 'A',
+        };
+        const result = await createForm('user1', input);
+
+        expect(result.defaultAliases).toHaveLength(1);
+        expect(result.defaultAliases[0]!.triggerRaw).toBe('a:text');
+        expect(result.skippedAliases).toHaveLength(1);
+        expect(result.skippedAliases[0]!.triggerRaw).toBe('a:text');
+        expect(result.skippedAliases[0]!.reason).toBe('Single character name');
+    });
 });
 
 describe('editForm function', () => {
@@ -238,6 +305,60 @@ describe('editForm function', () => {
             'Form name cannot be empty'
         );
     });
+
+    it('should handle database errors during update', async () => {
+        vi.mocked(formRepo.updateNameAvatar).mockRejectedValue(new Error('Database constraint violation'));
+
+        const input: EditFormInput = {
+            name: 'New Name',
+        };
+
+        await expect(editForm('form1', input)).rejects.toThrow('Database constraint violation');
+    });
+
+    it('should handle partial updates (only name)', async () => {
+        const mockForm = {
+            id: 'form1',
+            userId: 'user1',
+            name: 'New Name',
+            avatarUrl: null,
+            createdAt: new Date(),
+        };
+
+        vi.mocked(formRepo.updateNameAvatar).mockResolvedValue(mockForm);
+
+        const input: EditFormInput = {
+            name: 'New Name',
+        };
+        const result = await editForm('form1', input);
+
+        expect(formRepo.updateNameAvatar).toHaveBeenCalledWith('form1', {
+            name: 'New Name',
+            avatarUrl: null,
+        });
+    });
+
+    it('should handle partial updates (only avatar)', async () => {
+        const mockForm = {
+            id: 'form1',
+            userId: 'user1',
+            name: 'Old Name',
+            avatarUrl: 'https://example.com/new.png',
+            createdAt: new Date(),
+        };
+
+        vi.mocked(formRepo.updateNameAvatar).mockResolvedValue(mockForm);
+
+        const input: EditFormInput = {
+            avatarUrl: 'https://example.com/new.png',
+        };
+        const result = await editForm('form1', input);
+
+        expect(formRepo.updateNameAvatar).toHaveBeenCalledWith('form1', {
+            name: undefined,
+            avatarUrl: 'https://example.com/new.png',
+        });
+    });
 });
 
 describe('deleteForm function', () => {
@@ -273,6 +394,21 @@ describe('deleteForm function', () => {
         await expect(deleteForm('form1')).rejects.toThrow(
             'Form not found'
         );
+    });
+
+    it('should handle database errors during deletion', async () => {
+        const mockForm = {
+            id: 'form1',
+            userId: 'user1',
+            name: 'Test Form',
+            avatarUrl: null,
+            createdAt: new Date(),
+        };
+
+        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
+        vi.mocked(formRepo.delete).mockRejectedValue(new Error('Foreign key constraint'));
+
+        await expect(deleteForm('form1')).rejects.toThrow('Foreign key constraint');
     });
 });
 
@@ -376,5 +512,29 @@ describe('listForms function', () => {
         const result = await listForms('user1');
 
         expect(result).toEqual([]);
+    });
+
+    it('should handle database errors during form listing', async () => {
+        vi.mocked(formRepo.getByUser).mockRejectedValue(new Error('Database unavailable'));
+
+        await expect(listForms('user1')).rejects.toThrow('Database unavailable');
+        expect(aliasRepo.getByForm).not.toHaveBeenCalled();
+    });
+
+    it('should handle database errors during alias fetching', async () => {
+        const mockForms = [
+            {
+                id: 'form1',
+                userId: 'user1',
+                name: 'Form 1',
+                avatarUrl: null,
+                createdAt: new Date(),
+            },
+        ];
+
+        vi.mocked(formRepo.getByUser).mockResolvedValue(mockForms);
+        vi.mocked(aliasRepo.getByForm).mockRejectedValue(new Error('Alias query failed'));
+
+        await expect(listForms('user1')).rejects.toThrow('Alias query failed');
     });
 });

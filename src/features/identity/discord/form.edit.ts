@@ -5,13 +5,13 @@ import {
     TextInputBuilder,
     TextInputStyle,
     ActionRowBuilder,
-    ModalSubmitInteraction
+    ModalSubmitInteraction,
+    MessageFlags
 } from 'discord.js';
 import { editForm } from '../app/EditForm';
 import { listForms } from '../app/ListForms';
 import { DEFAULT_ALLOWED_MENTIONS } from '../../../shared/utils/allowedMentions';
-import { URL } from 'url';
-import log from '../../../shared/utils/logger';
+import { handleInteractionError, validateUrl } from '../../../shared/utils/errorHandling';
 
 export const data = new SlashCommandSubcommandBuilder()
     .setName('edit')
@@ -22,7 +22,9 @@ export const data = new SlashCommandSubcommandBuilder()
             .setRequired(true)
             .setAutocomplete(true));
 
-export async function execute(interaction: ChatInputCommandInteraction) {
+export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     const formId = interaction.options.getString('form', true);
 
     // Get the form to prefill the modal
@@ -30,11 +32,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const form = forms.find(f => f.id === formId);
 
     if (!form) {
-        return interaction.reply({
+        await interaction.reply({
             content: 'Form not found.',
             allowedMentions: DEFAULT_ALLOWED_MENTIONS,
             ephemeral: true
         });
+        return;
     }
 
     const modal = new ModalBuilder()
@@ -64,42 +67,44 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     modal.addComponents(nameRow, avatarRow);
 
-    return interaction.showModal(modal);
+    await interaction.showModal(modal);
 }
 
-export async function handleModalSubmit(interaction: ModalSubmitInteraction) {
+export async function handleModalSubmit(interaction: ModalSubmitInteraction): Promise<void> {
     const [action, formId] = interaction.customId.split(':');
     if (action !== 'edit_form' || !formId) return;
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const newName = interaction.fields.getTextInputValue('name').trim();
     const newAvatarUrl = interaction.fields.getTextInputValue('avatar_url').trim() || null;
 
     // Validate name
     if (!newName) {
-        return interaction.reply({
-            content: 'Form name cannot be empty.',
+        await interaction.reply({
+            content: 'Form name cannot be empty. Please provide a name for your form.',
             allowedMentions: DEFAULT_ALLOWED_MENTIONS,
             ephemeral: true
         });
+        return;
     }
 
     // Validate avatar URL if provided
     if (newAvatarUrl) {
-        try {
-            const url = new URL(newAvatarUrl);
-            if (!['http:', 'https:'].includes(url.protocol)) {
-                return interaction.reply({
-                    content: 'Avatar URL must be HTTP or HTTPS.',
-                    allowedMentions: DEFAULT_ALLOWED_MENTIONS,
-                    ephemeral: true
-                });
-            }
-        } catch {
-            return interaction.reply({
-                content: 'Invalid avatar URL format.',
+        const validation = validateUrl(newAvatarUrl, {
+            component: 'identity',
+            userId: interaction.user.id,
+            guildId: interaction.guild?.id,
+            channelId: interaction.channel?.id,
+            interactionId: interaction.id
+        });
+        if (!validation.isValid) {
+            await interaction.reply({
+                content: validation.errorMessage || 'Invalid avatar URL.',
                 allowedMentions: DEFAULT_ALLOWED_MENTIONS,
                 ephemeral: true
             });
+            return;
         }
     }
 
@@ -108,11 +113,12 @@ export async function handleModalSubmit(interaction: ModalSubmitInteraction) {
         const forms = await listForms(interaction.user.id);
         const oldForm = forms.find(f => f.id === formId);
         if (!oldForm) {
-            return interaction.reply({
+            await interaction.reply({
                 content: 'Form not found.',
                 allowedMentions: DEFAULT_ALLOWED_MENTIONS,
                 ephemeral: true
             });
+            return;
         }
 
         const updatedForm = await editForm(formId, {
@@ -136,24 +142,18 @@ export async function handleModalSubmit(interaction: ModalSubmitInteraction) {
             message += '\n• No changes made.';
         }
 
-        return interaction.reply({
+        await interaction.reply({
             content: message,
             allowedMentions: DEFAULT_ALLOWED_MENTIONS,
             ephemeral: true
         });
     } catch (error) {
-        log.error('Error editing form', {
+        await handleInteractionError(interaction, error, {
             component: 'identity',
             userId: interaction.user.id,
-            guildId: interaction.guild?.id || undefined,
-            error: error instanceof Error ? error.message : String(error),
-            status: 'error'
-        });
-        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
-        return interaction.reply({
-            content: `Failed to edit form: ${errorMessage}`,
-            allowedMentions: DEFAULT_ALLOWED_MENTIONS,
-            ephemeral: true
+            guildId: interaction.guild?.id,
+            channelId: interaction.channel?.id,
+            interactionId: interaction.id
         });
     }
 }

@@ -1,3 +1,5 @@
+import log from '../../../shared/utils/logger';
+
 /**
  * Normalize an alias trigger for storage and matching
  *
@@ -10,26 +12,35 @@
  * @param raw The raw alias trigger from user input
  * @returns Normalized trigger for database storage and matching
  */
-export function normalizeAlias(raw: string): string {
-    if (!raw || typeof raw !== 'string') {
-        throw new Error('Alias trigger must be a non-empty string');
-    }
+export async function normalizeAlias(raw: string): Promise<string> {
+    try {
+        if (!raw || typeof raw !== 'string') {
+            throw new Error('Alias trigger must be a non-empty string');
+        }
 
-    const trimmedRaw = raw.trim();
-    if (!trimmedRaw) {
-        throw new Error('Alias trigger must be a non-empty string');
-    }
+        const trimmedRaw = raw.trim();
+        if (!trimmedRaw) {
+            throw new Error('Alias trigger must be a non-empty string');
+        }
 
-    // Check for literal "text" requirement (case-insensitive word boundary check)
-    const textRegex = /\btext\b/i;
-    if (!textRegex.test(trimmedRaw)) {
-        throw new Error('Alias trigger must contain the literal word "text"');
-    }
+        // Check for literal "text" requirement (case-insensitive word boundary check)
+        const textRegex = /\btext\b/i;
+        if (!textRegex.test(trimmedRaw)) {
+            throw new Error('Alias trigger must contain the literal word "text"');
+        }
 
-    // Convert to lowercase, trim whitespace, and collapse internal whitespace
-    return trimmedRaw
-        .toLowerCase()
-        .replace(/\s+/g, ' ');
+        // Convert to lowercase, trim whitespace, and collapse internal whitespace
+        return trimmedRaw
+            .toLowerCase()
+            .replace(/\s+/g, ' ');
+    } catch (error) {
+        log.error('Failed to normalize alias', {
+            component: 'identity',
+            error: error instanceof Error ? error.message : String(error),
+            status: 'validation_error'
+        });
+        throw error;
+    }
 }
 
 /**

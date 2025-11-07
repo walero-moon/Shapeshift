@@ -180,7 +180,73 @@ Use **Pino** with a tiny wrapper:
 
 ---
 
-## 11) Discord specifics to remember
+## 11) Error Handling Framework
+
+### Error Handling Patterns and Utilities
+
+The project provides comprehensive error handling utilities in `src/shared/utils/errorHandling.ts`:
+
+* **`handleInteractionError`**: Handles Discord interaction errors with proper logging and user-friendly responses. Automatically determines whether to use `reply()` or `editReply()` based on interaction state. Always sets `allowedMentions` and makes responses ephemeral by default. **MANDATORY** for all Discord command/modal handlers to respect the 3-second interaction rule.
+
+* **`wrapAsync`**: Wraps async operations with try-catch, logging errors with full context. Returns result on success, or fallback value (or re-throws) on error. Use selectively in application layer for complex operations with multiple error paths.
+
+* **`validateUrl`**: Validates URL strings with specific error messages for avatar URLs. Checks protocol (http/https), hostname presence, and provides user-friendly error messages.
+
+* **`handleDatabaseError`**: Handles database operation errors with logging and graceful degradation. Useful for operations that can continue with cached/default data when DB is unavailable.
+
+* **`handleWebhookError`**: Handles webhook operation errors with graceful degradation. Webhook failures are logged but don't crash the bot - messaging continues in degraded mode. **MANDATORY** for webhook operations.
+
+* **`handleDegradedModeError`**: Wraps operations that should continue working even when dependencies are unavailable. Always returns a fallback value on error.
+
+### Retry Utilities
+
+Retry logic is implemented in `src/shared/utils/retry.ts`:
+
+* **`retryAsync`**: Retries operations with exponential backoff. Configurable `maxAttempts`, `baseDelay`, `maxDelay`, and `backoffFactor`.
+
+* **`retryWithJitter`**: Adds random jitter (±25% of delay) to retry timing to avoid thundering herd problems in concurrent scenarios.
+
+### Logging Standards and Context Fields
+
+Error handling integrates with the logging framework:
+
+* Use the `LogContext` interface for consistent logging fields: `component`, `guildId?`, `channelId?`, `userId?`, `interactionId?`, `route?`, `status?`.
+* All error handlers include error messages, stack traces (in dev), and operation context.
+* Status codes like `interaction_error`, `database_error`, `webhook_error`, `degraded_mode_fallback` provide consistent categorization.
+
+### Fallback Mechanisms and Graceful Degradation
+
+* **Webhook failures**: Bot continues operating but messaging features may be limited. Logged as `webhook_degraded`.
+* **Database failures**: Read operations can use cached/default data. Write operations typically rethrow for data integrity.
+* **Interaction errors**: Always attempt to respond to users with friendly messages, even if error response fails.
+* **Validation errors**: Provide specific, actionable error messages to guide users.
+
+### Testing Guidelines for Error Scenarios
+
+Error handling is thoroughly tested in `src/shared/utils/tests/`:
+
+* **Unit tests** for all error handling functions with mocked dependencies.
+* **Logger mocking** to verify error logging without console output.
+* **Fake timers** for testing retry delays and backoff.
+* **Error injection** to test fallback behaviors and graceful degradation.
+* **Edge cases**: Non-Error exceptions, response failures, malformed inputs.
+
+### Best Practices for Implementing Error Handling in New Features
+
+The project follows a **hybrid error handling approach** that balances safety, consistency, and developer productivity. Use comprehensive wrappers for critical safety concerns (Discord interactions, webhooks), but prefer direct error handling for application logic where business logic clarity is paramount.
+
+* **Always use `handleInteractionError`** for Discord command/modal handlers to respect the 3-second interaction rule.
+* **Always use `handleWebhookError`** for webhook operations to ensure graceful degradation.
+* **Use `wrapAsync` selectively** in application layer for complex operations with multiple error paths; prefer direct try-catch for simple operations.
+* **Handle validation errors** at the application layer with user-friendly messages.
+* **Log with consistent context** using `LogContext` fields for better observability.
+* **Provide meaningful fallbacks** where possible - prefer degraded functionality over complete failure.
+* **Test error scenarios** thoroughly, including edge cases and dependency failures.
+* **Set `allowedMentions`** explicitly on all Discord responses to prevent accidental pings.
+
+---
+
+## 12) Discord specifics to remember
 
 * **Interactions:** reply or defer within **~3s**; then follow up/edit. ([Discord][5])
 * **Components:** ≤ **5** action rows/message; a row holds **≤ 5 buttons** *or* **1 select**. ([Discord][6])

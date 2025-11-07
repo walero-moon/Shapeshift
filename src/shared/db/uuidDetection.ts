@@ -1,7 +1,8 @@
-import { db } from './client';
+import { getDatabase } from './client';
 import { sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 import log from '../utils/logger';
+import { retryAsync } from '../utils/retry';
 
 /**
  * Runtime detection of UUIDv7 availability in PostgreSQL
@@ -33,11 +34,25 @@ async function detectUuidv7Availability(): Promise<boolean> {
  */
 async function checkUuidv7Function(): Promise<boolean> {
     try {
+        const dbInstance = await getDatabase();
+        if (!dbInstance) {
+            log.warn('Database not available for UUIDv7 check, falling back to application generation', {
+                component: 'uuid-detection',
+                status: 'degraded_mode'
+            });
+            return false;
+        }
+
         // Try to call the uuidv7() function and see if it exists
-        const result = await db.execute(sql`SELECT uuidv7()`);
+        const result = await dbInstance.execute(sql`SELECT uuidv7()`);
         return (result as any).rows.length > 0;
-    } catch {
+    } catch (error) {
         // If the function doesn't exist, it will throw an error
+        log.error('Failed to check UUIDv7 function availability', {
+            component: 'uuid-detection',
+            error: error instanceof Error ? error.message : String(error),
+            status: 'error'
+        });
         return false;
     }
 }
@@ -51,16 +66,40 @@ export async function generateUuidv7(): Promise<string> {
 
     if (dbHasUuidv7) {
         try {
-            // Try to generate from database
-            const result = await db.execute(sql`SELECT uuidv7() as id`);
-            const rows = (result as any).rows;
-            if (rows.length > 0 && rows[0].id) {
-                return rows[0].id as string;
+            const dbInstance = await getDatabase();
+            if (!dbInstance) {
+                log.warn('Database not available for UUIDv7 generation, falling back to application generation', {
+                    component: 'uuid-detection',
+                    status: 'degraded_mode'
+                });
+                return uuidv7();
             }
-        } catch {
+
+            // Try to generate from database with retry
+            const result = await retryAsync(
+                async () => {
+                    const queryResult = await dbInstance.execute(sql`SELECT uuidv7() as id`);
+                    const rows = (queryResult as any).rows;
+                    if (rows.length > 0 && rows[0].id) {
+                        return rows[0].id as string;
+                    }
+                    throw new Error('No UUID returned from database');
+                },
+                {
+                    maxAttempts: 3,
+                    baseDelay: 100,
+                    maxDelay: 1000,
+                    backoffFactor: 2,
+                    component: 'uuid-detection',
+                    operation: 'generate_db'
+                }
+            );
+            return result;
+        } catch (error) {
             // Fall back to application generation if database call fails
             log.warn('Database UUIDv7 generation failed, falling back to application generation', {
                 component: 'uuid-detection',
+                error: error instanceof Error ? error.message : String(error),
                 status: 'fallback'
             });
         }

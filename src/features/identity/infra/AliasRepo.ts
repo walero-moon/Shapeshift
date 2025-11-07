@@ -2,6 +2,7 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '../../../shared/db/client';
 import { aliases } from '../../../shared/db/schema';
 import { generateUuidv7OrUndefined } from '../../../shared/db/uuidDetection';
+import { log } from '../../../shared/utils/logger';
 
 export interface CreateAliasData {
   triggerRaw: string;
@@ -32,7 +33,7 @@ export interface AliasRepo {
  * Provides database operations for alias management with time-ordered UUIDs
  */
 export class DrizzleAliasRepo implements AliasRepo {
-async create(userId: string, formId: string, data: CreateAliasData): Promise<Alias> {
+  async create(userId: string, formId: string, data: CreateAliasData): Promise<Alias> {
     if (!data.triggerRaw?.trim()) {
       throw new Error('Alias trigger is required');
     }
@@ -64,42 +65,65 @@ async create(userId: string, formId: string, data: CreateAliasData): Promise<Ali
       insertData.id = id;
     }
 
-    const result = await db.insert(aliases).values(insertData as typeof aliases.$inferInsert).returning();
-
-    const alias = result[0];
-    if (!alias) {
-      throw new Error('Failed to create alias');
+    try {
+      const result = await db.insert(aliases).values(insertData as typeof aliases.$inferInsert).returning();
+      const alias = result[0];
+      if (!alias) {
+        throw new Error('Failed to create alias');
+      }
+      return alias;
+    } catch (error) {
+      log.error('Failed to create alias', { component: 'identity', userId, status: 'database_error', error });
+      throw error;
     }
-    return alias;
   }
 
   async getByForm(formId: string): Promise<Alias[]> {
-    const result = await db.select().from(aliases).where(eq(aliases.formId, formId));
-    return result;
+    try {
+      const result = await db.select().from(aliases).where(eq(aliases.formId, formId));
+      return result;
+    } catch (error) {
+      log.error('Failed to get aliases by form', { component: 'identity', status: 'database_error', error });
+      throw error;
+    }
   }
 
   async getByUser(userId: string): Promise<Alias[]> {
-    const result = await db.select().from(aliases).where(eq(aliases.userId, userId));
-    return result;
+    try {
+      const result = await db.select().from(aliases).where(eq(aliases.userId, userId));
+      return result;
+    } catch (error) {
+      log.error('Failed to get aliases by user', { component: 'identity', userId, status: 'database_error', error });
+      throw error;
+    }
   }
 
   async delete(aliasId: string): Promise<void> {
-    const result = await db.delete(aliases).where(eq(aliases.id, aliasId));
-
-    // In Drizzle, if no rows were affected, the result array will be empty
-    if (result.length === 0) {
-      throw new Error('Alias not found');
+    try {
+      const result = await db.delete(aliases).where(eq(aliases.id, aliasId)).returning();
+      // In Drizzle, if no rows were affected, the result array will be empty
+      if (result.length === 0) {
+        throw new Error('Alias not found');
+      }
+    } catch (error) {
+      log.error('Failed to delete alias', { component: 'identity', status: 'database_error', error });
+      throw error;
     }
   }
 
   async findCollision(userId: string, triggerNorm: string): Promise<Alias | null> {
-    const result = await db.select()
-      .from(aliases)
-      .where(and(
-        eq(aliases.userId, userId),
-        eq(aliases.triggerNorm, triggerNorm)
-      ));
-    return result[0] || null;
+    try {
+      const result = await db.select()
+        .from(aliases)
+        .where(and(
+          eq(aliases.userId, userId),
+          eq(aliases.triggerNorm, triggerNorm)
+        ));
+      return result[0] || null;
+    } catch (error) {
+      log.error('Failed to find collision', { component: 'identity', userId, status: 'database_error', error });
+      throw error;
+    }
   }
 }
 

@@ -343,3 +343,270 @@ describe('components limit compliance', () => {
         }
     });
 });
+
+describe('form add error handling', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('should handle empty form name validation', async () => {
+        const mockInteraction = {
+            deferReply: vi.fn(),
+            editReply: vi.fn(),
+            options: {
+                getString: vi.fn().mockReturnValueOnce('').mockReturnValueOnce(null),
+            },
+            user: { id: 'user1' },
+        };
+
+        await addExecute(mockInteraction as any);
+
+        expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
+        expect(mockInteraction.editReply).toHaveBeenCalledWith({
+            content: 'Form name cannot be empty. Please provide a name for your form.',
+            allowedMentions: { parse: [], repliedUser: false }
+        });
+        expect(createForm).not.toHaveBeenCalled();
+    });
+
+    it('should handle invalid avatar URL validation', async () => {
+        const mockInteraction = {
+            deferReply: vi.fn(),
+            editReply: vi.fn(),
+            options: {
+                getString: vi.fn().mockReturnValueOnce('Test Form').mockReturnValueOnce('invalid-url'),
+            },
+            user: { id: 'user1' },
+        };
+
+        await addExecute(mockInteraction as any);
+
+        expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
+        expect(mockInteraction.editReply).toHaveBeenCalledWith({
+            content: expect.stringContaining('Avatar URL must start with http:// or https://'),
+            allowedMentions: { parse: [], repliedUser: false }
+        });
+        expect(createForm).not.toHaveBeenCalled();
+    });
+
+    it('should handle createForm database errors gracefully', async () => {
+        vi.mocked(createForm).mockRejectedValue(new Error('Database connection failed'));
+
+        const mockInteraction = {
+            deferReply: vi.fn(),
+            editReply: vi.fn(),
+            options: {
+                getString: vi.fn().mockReturnValueOnce('Test Form').mockReturnValueOnce(null),
+            },
+            user: { id: 'user1' },
+        };
+
+        await addExecute(mockInteraction as any);
+
+        expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
+        expect(mockInteraction.editReply).toHaveBeenCalledWith({
+            content: 'An unexpected error occurred. Please try again later.',
+            allowedMentions: { parse: [], repliedUser: false }
+        });
+    });
+
+    it('should handle interaction reply failures', async () => {
+        const mockInteraction = {
+            deferReply: vi.fn().mockRejectedValue(new Error('Interaction expired')),
+            editReply: vi.fn(),
+            options: {
+                getString: vi.fn().mockReturnValueOnce('Test Form').mockReturnValueOnce(null),
+            },
+            user: { id: 'user1' },
+        };
+
+        // Should not throw, but log the error
+        await expect(addExecute(mockInteraction as any)).resolves.toBeUndefined();
+        expect(mockInteraction.editReply).not.toHaveBeenCalled();
+    });
+});
+
+describe('form edit error handling', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('should handle empty form name in modal submit', async () => {
+        const mockInteraction = {
+            customId: 'edit_form:form1',
+            user: { id: 'user1' },
+            fields: {
+                getTextInputValue: vi.fn()
+                    .mockReturnValueOnce('') // Empty name
+                    .mockReturnValueOnce('https://example.com/avatar.png'),
+            },
+            deferUpdate: vi.fn(),
+            reply: vi.fn(),
+        };
+
+        await handleModalSubmit(mockInteraction as any);
+
+        expect(mockInteraction.deferUpdate).toHaveBeenCalled();
+        expect(mockInteraction.reply).toHaveBeenCalledWith({
+            content: 'Form name cannot be empty. Please provide a name for your form.',
+            allowedMentions: { parse: [], repliedUser: false },
+            ephemeral: true
+        });
+        expect(editForm).not.toHaveBeenCalled();
+    });
+
+    it('should handle invalid avatar URL in modal submit', async () => {
+        const mockInteraction = {
+            customId: 'edit_form:form1',
+            user: { id: 'user1' },
+            fields: {
+                getTextInputValue: vi.fn()
+                    .mockReturnValueOnce('Updated Name')
+                    .mockReturnValueOnce('ftp://invalid.com/avatar.png'), // Invalid protocol
+            },
+            deferUpdate: vi.fn(),
+            reply: vi.fn(),
+        };
+
+        await handleModalSubmit(mockInteraction as any);
+
+        expect(mockInteraction.deferUpdate).toHaveBeenCalled();
+        expect(mockInteraction.reply).toHaveBeenCalledWith({
+            content: expect.stringContaining('Avatar URL must start with http:// or https://'),
+            allowedMentions: { parse: [], repliedUser: false },
+            ephemeral: true
+        });
+        expect(editForm).not.toHaveBeenCalled();
+    });
+
+    it('should handle editForm database errors gracefully', async () => {
+        vi.mocked(editForm).mockRejectedValue(new Error('Database constraint violation'));
+
+        const mockInteraction = {
+            customId: 'edit_form:form1',
+            user: { id: 'user1' },
+            fields: {
+                getTextInputValue: vi.fn()
+                    .mockReturnValueOnce('Updated Name')
+                    .mockReturnValueOnce(''),
+            },
+            deferUpdate: vi.fn(),
+            editReply: vi.fn(),
+        };
+
+        await handleModalSubmit(mockInteraction as any);
+
+        expect(mockInteraction.deferUpdate).toHaveBeenCalled();
+        expect(mockInteraction.editReply).toHaveBeenCalledWith({
+            content: 'An unexpected error occurred. Please try again later.',
+            allowedMentions: { parse: [], repliedUser: false }
+        });
+    });
+
+    it('should handle form not found in edit execute', async () => {
+        vi.mocked(listForms).mockResolvedValue([]); // No forms
+
+        const mockInteraction = {
+            deferReply: vi.fn(),
+            reply: vi.fn(),
+            options: {
+                getString: vi.fn().mockReturnValue('nonexistent'),
+            },
+            user: { id: 'user1' },
+        };
+
+        await expect(() => (require('../discord/form.edit') as any).execute(mockInteraction as any)).rejects.toThrow();
+        // The execute function throws, but in real Discord it would be caught by the framework
+    });
+});
+
+describe('form delete error handling', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('should handle deleteForm database errors gracefully', async () => {
+        vi.mocked(deleteForm).mockRejectedValue(new Error('Foreign key constraint'));
+
+        const mockInteraction = {
+            deferReply: vi.fn(),
+            editReply: vi.fn(),
+            options: {
+                getString: vi.fn().mockReturnValue('form1'),
+            },
+            user: { id: 'user1' },
+        };
+
+        await (require('../discord/form.delete') as any).execute(mockInteraction as any);
+
+        expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
+        expect(mockInteraction.editReply).toHaveBeenCalledWith({
+            content: 'An unexpected error occurred. Please try again later.',
+            allowedMentions: { parse: [], repliedUser: false }
+        });
+    });
+});
+
+describe('form list error handling', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('should handle listForms database errors gracefully', async () => {
+        vi.mocked(listForms).mockRejectedValue(new Error('Database unavailable'));
+
+        const mockInteraction = {
+            deferReply: vi.fn(),
+            editReply: vi.fn(),
+            user: { id: 'user1' },
+        };
+
+        await listExecute(mockInteraction as any);
+
+        expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
+        expect(mockInteraction.editReply).toHaveBeenCalledWith({
+            content: 'An unexpected error occurred. Please try again later.',
+            allowedMentions: { parse: [], repliedUser: false }
+        });
+    });
+
+    it('should handle pagination button interaction errors', async () => {
+        vi.mocked(listForms).mockRejectedValue(new Error('Connection timeout'));
+
+        const mockInteraction = {
+            customId: 'form_list:2',
+            user: { id: 'user1' },
+            update: vi.fn(),
+        };
+
+        await (require('../discord/form.list') as any).handleButtonInteraction(mockInteraction as any);
+
+        expect(mockInteraction.update).toHaveBeenCalledWith({
+            content: 'Failed to update page: Connection timeout',
+            embeds: [],
+            components: [],
+            allowedMentions: { parse: [], repliedUser: false }
+        });
+    });
+});
+
+describe('form autocomplete error handling', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('should handle listForms errors in autocomplete', async () => {
+        vi.mocked(listForms).mockRejectedValue(new Error('Database error'));
+
+        const mockInteraction = {
+            user: { id: 'user1' },
+            options: {
+                getFocused: vi.fn().mockReturnValue({ name: 'form', value: 'test' }),
+            },
+            respond: vi.fn(),
+        };
+
+        await expect(autocompleteExecute(mockInteraction as any)).rejects.toThrow('Database error');
+        expect(mockInteraction.respond).not.toHaveBeenCalled();
+    });
+});
