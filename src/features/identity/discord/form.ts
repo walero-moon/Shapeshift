@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, Message } from 'discord.js';
 import { data as addData, execute as addExecute } from './form.add';
 import { data as editData, execute as editExecute } from './form.edit';
 import { data as deleteData, execute as deleteExecute } from './form.delete';
@@ -14,23 +14,24 @@ export const command = {
         .addSubcommand(editData)
         .addSubcommand(deleteData)
         .addSubcommand(listData),
-    execute: async (interaction: ChatInputCommandInteraction) => {
+    execute: async (interaction: ChatInputCommandInteraction): Promise<Message<boolean> | undefined> => {
         const subcommand = interaction.options.getSubcommand();
 
         try {
             switch (subcommand) {
                 case 'add':
-                    return addExecute(interaction);
+                    return await addExecute(interaction);
                 case 'edit':
-                    return editExecute(interaction);
+                    await editExecute(interaction);
+                    return undefined;
                 case 'delete':
-                    return deleteExecute(interaction);
+                    return await deleteExecute(interaction);
                 case 'list':
-                    return listExecute(interaction);
+                    return await listExecute(interaction);
                 default:
-                    return interaction.reply({
-                        content: 'Unknown subcommand.',
-                        ephemeral: true
+                    await interaction.deferReply({ ephemeral: true });
+                    return await interaction.editReply({
+                        content: 'Unknown subcommand.'
                     });
             }
         } catch (error) {
@@ -41,6 +42,7 @@ export const command = {
                 channelId: interaction.channel?.id || undefined,
                 interactionId: interaction.id
             });
+            return undefined;
         }
     },
     autocomplete: autocompleteExecute

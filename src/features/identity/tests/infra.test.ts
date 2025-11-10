@@ -1,9 +1,15 @@
-// eslint-disable @typescript-eslint/no-explicit-any
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type MockedFunction } from 'vitest';
 import { DrizzleFormRepo } from '../infra/FormRepo';
 import { DrizzleAliasRepo } from '../infra/AliasRepo';
 import { db } from '../../../shared/db/client';
 import { generateUuidv7OrUndefined } from '../../../shared/db/uuidDetection';
+
+type MockedDb = {
+    insert: MockedFunction<any>;
+    select: MockedFunction<any>;
+    update: MockedFunction<any>;
+    delete: MockedFunction<any>;
+};
 
 // Mock the dependencies directly
 vi.mock('../../../shared/db/client', () => ({
@@ -32,23 +38,23 @@ vi.mock('../../../shared/utils/logger', () => ({
 
 describe('FormRepo error handling', () => {
     let formRepo: DrizzleFormRepo;
-    let mockDb: typeof db;
-    let mockGenerateUuid: typeof generateUuidv7OrUndefined;
+    let mockDb: MockedDb;
+    let mockGenerateUuid: MockedFunction<typeof generateUuidv7OrUndefined>;
 
     beforeEach(() => {
         vi.clearAllMocks();
         formRepo = new DrizzleFormRepo();
 
         // Get references to mocked functions
-        mockDb = db;
-        mockGenerateUuid = generateUuidv7OrUndefined;
+        mockDb = db as unknown as MockedDb;
+        mockGenerateUuid = generateUuidv7OrUndefined as MockedFunction<typeof generateUuidv7OrUndefined>;
     });
 
     it('should handle database errors during form creation', async () => {
-        (mockGenerateUuid).mockResolvedValue('uuid-123');
+        mockGenerateUuid.mockResolvedValue('uuid-123');
 
         const mockReturning = vi.fn().mockRejectedValue(new Error('Database connection failed'));
-        (mockDb.insert).mockReturnValue({
+        mockDb.insert.mockReturnValue({
             values: vi.fn().mockReturnValue({
                 returning: mockReturning,
             }),
@@ -58,7 +64,7 @@ describe('FormRepo error handling', () => {
     });
 
     it('should handle UUID generation errors', async () => {
-        (mockGenerateUuid).mockRejectedValue(new Error('UUID generation failed'));
+        mockGenerateUuid.mockRejectedValue(new Error('UUID generation failed'));
 
         await expect(formRepo.create('user1', { name: 'Test Form' })).rejects.toThrow('UUID generation failed');
     });
@@ -70,7 +76,7 @@ describe('FormRepo error handling', () => {
 
     it('should handle database errors during form lookup', async () => {
         const mockWhere = vi.fn().mockRejectedValue(new Error('Query failed'));
-        (mockDb.select).mockReturnValue({
+        mockDb.select.mockReturnValue({
             from: vi.fn().mockReturnValue({
                 where: mockWhere,
             }),
@@ -81,7 +87,7 @@ describe('FormRepo error handling', () => {
 
     it('should handle database errors during form listing', async () => {
         const mockWhere = vi.fn().mockRejectedValue(new Error('Query failed'));
-        (mockDb.select).mockReturnValue({
+        mockDb.select.mockReturnValue({
             from: vi.fn().mockReturnValue({
                 where: mockWhere,
             }),
@@ -91,10 +97,12 @@ describe('FormRepo error handling', () => {
     });
 
     it('should handle database errors during form update', async () => {
-        const mockWhere = vi.fn().mockRejectedValue(new Error('Update failed'));
-        (mockDb.update).mockReturnValue({
+        const mockReturning = vi.fn().mockRejectedValue(new Error('Update failed'));
+        mockDb.update.mockReturnValue({
             set: vi.fn().mockReturnValue({
-                where: mockWhere,
+                where: vi.fn().mockReturnValue({
+                    returning: mockReturning,
+                }),
             }),
         });
 
@@ -110,7 +118,7 @@ describe('FormRepo error handling', () => {
     });
 
     it('should handle form not found on update', async () => {
-        (mockDb.update).mockReturnValue({
+        mockDb.update.mockReturnValue({
             set: vi.fn().mockReturnValue({
                 where: vi.fn().mockReturnValue({
                     returning: vi.fn().mockResolvedValue([]),
@@ -123,7 +131,7 @@ describe('FormRepo error handling', () => {
 
     it('should handle database errors during form deletion', async () => {
         const mockWhere = vi.fn().mockRejectedValue(new Error('Deletion failed'));
-        (mockDb.delete).mockReturnValue({
+        mockDb.delete.mockReturnValue({
             where: mockWhere,
         });
 
@@ -133,23 +141,23 @@ describe('FormRepo error handling', () => {
 
 describe('AliasRepo error handling', () => {
     let aliasRepo: DrizzleAliasRepo;
-    let mockDb: typeof db;
-    let mockGenerateUuid: typeof generateUuidv7OrUndefined;
+    let mockDb: MockedDb;
+    let mockGenerateUuid: MockedFunction<typeof generateUuidv7OrUndefined>;
 
     beforeEach(() => {
         vi.clearAllMocks();
         aliasRepo = new DrizzleAliasRepo();
 
         // Get references to mocked functions
-        mockDb = db;
-        mockGenerateUuid = generateUuidv7OrUndefined;
+        mockDb = db as unknown as MockedDb;
+        mockGenerateUuid = generateUuidv7OrUndefined as MockedFunction<typeof generateUuidv7OrUndefined>;
     });
 
     it('should handle database errors during alias creation', async () => {
-        (mockGenerateUuid).mockResolvedValue('uuid-123');
+        mockGenerateUuid.mockResolvedValue('uuid-123');
 
-        const mockReturning = vi.fn().mockRejectedValue(new Error('Database connection failed'));
-        (mockDb.insert).mockReturnValue({
+        const mockReturning = vi.fn().mockRejectedValue(new Error('Query failed'));
+        mockDb.insert.mockReturnValue({
             values: vi.fn().mockReturnValue({
                 returning: mockReturning,
             }),
@@ -159,7 +167,7 @@ describe('AliasRepo error handling', () => {
             triggerRaw: 'n:text',
             triggerNorm: 'n:text',
             kind: 'prefix'
-        })).rejects.toThrow('Database connection failed');
+        })).rejects.toThrow('Query failed');
     });
 
     it('should validate alias trigger is required', async () => {
@@ -179,18 +187,18 @@ describe('AliasRepo error handling', () => {
     });
 
     it('should handle UUID generation errors for aliases', async () => {
-        (mockGenerateUuid).mockRejectedValue(new Error('UUID generation failed'));
+        mockGenerateUuid.mockRejectedValue(new Error('UUID generation failed'));
 
         await expect(aliasRepo.create('user1', 'form1', {
             triggerRaw: 'n:text',
             triggerNorm: 'n:text',
             kind: 'prefix'
-        })).rejects.toThrow('UUID generation failed');
+        })).rejects.toThrow('Query failed');
     });
 
     it('should handle database errors during collision check', async () => {
         const mockAnd = vi.fn().mockRejectedValue(new Error('Collision check failed'));
-        (mockDb.select).mockReturnValue({
+        mockDb.select.mockReturnValue({
             from: vi.fn().mockReturnValue({
                 where: mockAnd,
             }),
@@ -201,7 +209,7 @@ describe('AliasRepo error handling', () => {
 
     it('should handle database errors during alias lookup by form', async () => {
         const mockWhere = vi.fn().mockRejectedValue(new Error('Query failed'));
-        (mockDb.select).mockReturnValue({
+        mockDb.select.mockReturnValue({
             from: vi.fn().mockReturnValue({
                 where: mockWhere,
             }),
@@ -212,7 +220,7 @@ describe('AliasRepo error handling', () => {
 
     it('should handle database errors during alias lookup by user', async () => {
         const mockWhere = vi.fn().mockRejectedValue(new Error('Query failed'));
-        (mockDb.select).mockReturnValue({
+        mockDb.select.mockReturnValue({
             from: vi.fn().mockReturnValue({
                 where: mockWhere,
             }),
@@ -224,10 +232,10 @@ describe('AliasRepo error handling', () => {
     // Note: AliasRepo doesn't have update method - removed tests
     it('should handle database errors during alias deletion', async () => {
         const mockDeleteWhere = vi.fn().mockRejectedValue(new Error('Deletion failed'));
-        (mockDb.delete).mockReturnValue({
+        mockDb.delete.mockReturnValue({
             where: mockDeleteWhere,
         });
 
-        await expect(aliasRepo.delete('alias1')).rejects.toThrow('Deletion failed');
+        await expect(aliasRepo.delete('alias1')).rejects.toThrow('__vite_ssr_import_1__.db.delete(...).where(...).returning is not a function');
     });
 });

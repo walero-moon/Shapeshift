@@ -1,4 +1,4 @@
-import { ChatInputCommandInteraction, ModalSubmitInteraction } from 'discord.js';
+import { ChatInputCommandInteraction, ModalSubmitInteraction, MessageFlags } from 'discord.js';
 import { URL } from 'url';
 import { DEFAULT_ALLOWED_MENTIONS } from './allowedMentions';
 import log, { LogContext } from './logger';
@@ -42,7 +42,7 @@ export async function handleInteractionError(
             await interaction.reply({
                 content: userMessage,
                 allowedMentions: DEFAULT_ALLOWED_MENTIONS,
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
     } catch (responseError) {

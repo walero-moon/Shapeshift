@@ -32,12 +32,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const form = forms.find(f => f.id === formId);
 
     if (!form) {
-        await interaction.reply({
-            content: 'Form not found.',
-            allowedMentions: DEFAULT_ALLOWED_MENTIONS,
-            ephemeral: true
-        });
-        return;
+        throw new Error('Form not found');
     }
 
     const modal = new ModalBuilder()
@@ -74,17 +69,16 @@ export async function handleModalSubmit(interaction: ModalSubmitInteraction): Pr
     const [action, formId] = interaction.customId.split(':');
     if (action !== 'edit_form' || !formId) return;
 
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await interaction.deferUpdate();
 
     const newName = interaction.fields.getTextInputValue('name').trim();
     const newAvatarUrl = interaction.fields.getTextInputValue('avatar_url').trim() || null;
 
     // Validate name
     if (!newName) {
-        await interaction.reply({
+        await interaction.editReply({
             content: 'Form name cannot be empty. Please provide a name for your form.',
-            allowedMentions: DEFAULT_ALLOWED_MENTIONS,
-            ephemeral: true
+            allowedMentions: DEFAULT_ALLOWED_MENTIONS
         });
         return;
     }
@@ -99,10 +93,9 @@ export async function handleModalSubmit(interaction: ModalSubmitInteraction): Pr
             interactionId: interaction.id
         });
         if (!validation.isValid) {
-            await interaction.reply({
+            await interaction.editReply({
                 content: validation.errorMessage || 'Invalid avatar URL.',
-                allowedMentions: DEFAULT_ALLOWED_MENTIONS,
-                ephemeral: true
+                allowedMentions: DEFAULT_ALLOWED_MENTIONS
             });
             return;
         }
@@ -113,10 +106,9 @@ export async function handleModalSubmit(interaction: ModalSubmitInteraction): Pr
         const forms = await listForms(interaction.user.id);
         const oldForm = forms.find(f => f.id === formId);
         if (!oldForm) {
-            await interaction.reply({
+            await interaction.editReply({
                 content: 'Form not found.',
-                allowedMentions: DEFAULT_ALLOWED_MENTIONS,
-                ephemeral: true
+                allowedMentions: DEFAULT_ALLOWED_MENTIONS
             });
             return;
         }
@@ -142,10 +134,9 @@ export async function handleModalSubmit(interaction: ModalSubmitInteraction): Pr
             message += '\n• No changes made.';
         }
 
-        await interaction.reply({
+        await interaction.editReply({
             content: message,
-            allowedMentions: DEFAULT_ALLOWED_MENTIONS,
-            ephemeral: true
+            allowedMentions: DEFAULT_ALLOWED_MENTIONS
         });
     } catch (error) {
         await handleInteractionError(interaction, error, {

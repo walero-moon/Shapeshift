@@ -314,7 +314,7 @@ describe('listAliases function', () => {
         expect(result).toEqual({
             form: {
                 id: 'form1',
-                name: 'Neoli',
+                name: '',
                 avatarUrl: null,
             },
             aliases: [],

@@ -29,6 +29,16 @@ export async function normalizeAlias(raw: string): Promise<string> {
             throw new Error('Alias trigger must contain the literal word "text"');
         }
 
+        // Additional validation: reject malformed patterns that start with bracket but don't close properly
+        if ((trimmedRaw.startsWith('{') && !trimmedRaw.includes('}')) ||
+            (trimmedRaw.startsWith('[') && !trimmedRaw.includes(']')) ||
+            (trimmedRaw.startsWith('<') && !trimmedRaw.includes('>')) ||
+            (trimmedRaw.endsWith('}') && !trimmedRaw.startsWith('{')) ||
+            (trimmedRaw.endsWith(']') && !trimmedRaw.startsWith('[')) ||
+            (trimmedRaw.endsWith('>') && !trimmedRaw.startsWith('<'))) {
+            throw new Error('Alias trigger must contain the literal word "text"');
+        }
+
         // Convert to lowercase, trim whitespace, and collapse internal whitespace
         return trimmedRaw
             .toLowerCase()

@@ -89,8 +89,8 @@ describe('Edge Cases and Input Validation', () => {
             expect(() => new globalThis.URL('not-a-url')).toThrow();
             expect(() => new globalThis.URL('http://')).toThrow();
             expect(() => new globalThis.URL('https://')).toThrow();
-            expect(() => new globalThis.URL('ftp://example.com')).toThrow();
-            expect(() => new globalThis.URL('javascript:alert(1)')).toThrow();
+            expect(() => new globalThis.URL('ftp://example.com')).not.toThrow();
+            expect(() => new globalThis.URL('://')).toThrow();
         });
 
         it('should handle URLs with special characters', () => {

@@ -36,7 +36,7 @@ async function checkUuidv7Function(): Promise<boolean> {
     try {
         // Try to call the uuidv7() function and see if it exists
         const result = await db.execute(sql`SELECT uuidv7()`);
-        return (result as { rows: unknown[] }).rows.length > 0;
+        return (result as unknown as { rows: unknown[] }).rows.length > 0;
     } catch (error) {
         // If the function doesn't exist, it will throw an error
         log.error('Failed to check UUIDv7 function availability', {
@@ -61,8 +61,8 @@ export async function generateUuidv7(): Promise<string> {
             const result = await retryAsync(
                 async () => {
                     const queryResult = await db.execute(sql`SELECT uuidv7() as id`);
-                    const rows = (queryResult as unknown as { rows: { id: string }[] }).rows;
-                    if (rows.length > 0 && rows[0].id) {
+                    const rows = (queryResult as unknown as { rows: { id?: string }[] }).rows;
+                    if (rows.length > 0 && rows[0]?.id) {
                         return rows[0].id as string;
                     }
                     throw new Error('No UUID returned from database');

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ChatInputCommandInteraction } from 'discord.js';
+import { ChatInputCommandInteraction, MessageFlags } from 'discord.js';
 import {
     handleInteractionError,
     wrapAsync,
@@ -78,7 +78,7 @@ describe('handleInteractionError', () => {
         expect(mockInteraction.reply).toHaveBeenCalledWith({
             content: 'An unexpected error occurred. Please try again later.',
             allowedMentions: { parse: [], repliedUser: false },
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     });
 
@@ -98,7 +98,7 @@ describe('handleInteractionError', () => {
         expect(mockInteraction.reply).toHaveBeenCalledWith({
             content: 'Custom error message',
             allowedMentions: { parse: [], repliedUser: false },
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     });
 

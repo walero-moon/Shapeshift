@@ -8,29 +8,16 @@ export async function execute(interaction: AutocompleteInteraction) {
         return interaction.respond([]);
     }
 
-    try {
-        const forms = await listForms(interaction.user.id);
-        const partialName = focusedOption.value.toLowerCase();
+    const forms = await listForms(interaction.user.id);
+    const partialName = focusedOption.value.toLowerCase();
 
-        const filtered = forms
-            .filter(form => form.name.toLowerCase().includes(partialName))
-            .slice(0, 25)
-            .map(form => ({
-                name: form.name,
-                value: form.id
-            }));
+    const filtered = forms
+        .filter(form => form.name.toLowerCase().includes(partialName))
+        .slice(0, 25)
+        .map(form => ({
+            name: form.name,
+            value: form.id
+        }));
 
-        return interaction.respond(filtered);
-    } catch (error) {
-        // For autocomplete, we can't use handleInteractionError as it expects reply/editReply methods
-        // Instead, log the error and respond with empty array
-        console.error('Error in form autocomplete', {
-            component: 'identity',
-            userId: interaction.user.id,
-            guildId: interaction.guild?.id,
-            error: error instanceof Error ? error.message : String(error),
-            status: 'error'
-        });
-        return interaction.respond([]);
-    }
+    return interaction.respond(filtered);
 }

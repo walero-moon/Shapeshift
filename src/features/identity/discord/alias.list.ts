@@ -3,7 +3,8 @@ import {
     ChatInputCommandInteraction,
     ButtonInteraction,
     EmbedBuilder,
-    MessageFlags
+    MessageFlags,
+    Message
 } from 'discord.js';
 import { listAliases } from '../app/ListAliases';
 import { DEFAULT_ALLOWED_MENTIONS } from '../../../shared/utils/allowedMentions';
@@ -22,7 +23,7 @@ export const data = new SlashCommandSubcommandBuilder()
             .setRequired(true)
             .setAutocomplete(true));
 
-export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+export async function execute(interaction: ChatInputCommandInteraction): Promise<Message<boolean> | undefined> {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const formId = interaction.options.getString('form', true);
@@ -31,11 +32,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         const result = await listAliases(formId, interaction.user.id);
 
         if (result.aliases.length === 0) {
-            await interaction.editReply({
+            return await interaction.editReply({
                 content: `No aliases found for form "${result.form.name}". Add one with \`/alias add\`.`,
                 allowedMentions: DEFAULT_ALLOWED_MENTIONS
             });
-            return;
         }
 
         const { totalPages, currentPage } = calculatePagination(result.aliases.length, ALIASES_PER_PAGE);
@@ -46,7 +46,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             customIdPrefix: 'alias_list'
         });
 
-        await interaction.editReply({
+        return await interaction.editReply({
             embeds: [embed],
             components,
             allowedMentions: DEFAULT_ALLOWED_MENTIONS
@@ -59,6 +59,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             channelId: interaction.channel?.id || undefined,
             interactionId: interaction.id
         });
+        return undefined;
     }
 }
 

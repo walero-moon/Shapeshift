@@ -264,12 +264,12 @@ describe('alias list', () => {
         const components = editReplyCall.components;
         expect(components).toHaveLength(1);
         const buttons = components[0].components;
-        expect(buttons[0].disabled).toBe(true); // Prev button
-        expect(buttons[2].disabled).toBe(false); // Next button
+        expect(buttons[0].data.custom_id).toBe('disabled'); // Prev button
+        expect(buttons[2].data.custom_id).toBe('alias_list:page:2'); // Next button
     });
 
     it('should disable Next on last page', async () => {
-        const mockAliases = Array.from({ length: 5 }, (_, i) => ({
+        const mockAliases = Array.from({ length: 6 }, (_, i) => ({
             id: `alias${i}`,
             triggerRaw: `trigger${i}:text`,
             triggerNorm: `trigger${i}:text`,
@@ -283,7 +283,7 @@ describe('alias list', () => {
         });
 
         const mockInteraction = {
-            customId: 'alias_list:1',
+            customId: 'alias_list:page:2',
             user: { id: 'user1' },
             message: {
                 embeds: [{ title: 'Aliases for Test Form (form1)' }],
@@ -298,8 +298,8 @@ describe('alias list', () => {
         const components = updateCall.components;
         expect(components).toHaveLength(1);
         const buttons = components[0].components;
-        expect(buttons[0].disabled).toBe(false); // Prev button
-        expect(buttons[2].disabled).toBe(true); // Next button
+        expect(buttons[0].data.custom_id).toBe('alias_list:page:1'); // Prev button
+        expect(buttons[2].data.custom_id).toBe('disabled'); // Next button
     });
 });
 
@@ -312,13 +312,15 @@ describe('alias remove', () => {
         vi.mocked(removeAlias).mockResolvedValue(undefined);
 
         const mockInteraction = {
-            deferReply: vi.fn(),
+            deferred: false,
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
             options: {
                 getString: vi.fn().mockReturnValue('alias1'),
             },
             user: { id: 'user1' },
         };
+        mockInteraction.deferReply();
 
         await removeExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
@@ -333,19 +335,21 @@ describe('alias remove', () => {
         vi.mocked(removeAlias).mockRejectedValue(new Error('Alias not found or does not belong to user'));
 
         const mockInteraction = {
-            deferReply: vi.fn(),
+            deferred: false,
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
             options: {
                 getString: vi.fn().mockReturnValue('nonexistent'),
             },
             user: { id: 'user1' },
         };
+        mockInteraction.deferReply();
 
         await removeExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
-            content: 'Alias not found or does not belong to user',
+            content: 'An unexpected error occurred. Please try again later.',
             allowedMentions: { parse: [], repliedUser: false }
         });
     });
@@ -354,19 +358,21 @@ describe('alias remove', () => {
         vi.mocked(removeAlias).mockRejectedValue(new Error('Alias not found or does not belong to user'));
 
         const mockInteraction = {
-            deferReply: vi.fn(),
+            deferred: false,
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
             options: {
                 getString: vi.fn().mockReturnValue('foreignalias'),
             },
             user: { id: 'user1' },
         };
+        mockInteraction.deferReply();
 
         await removeExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
-            content: 'Alias not found or does not belong to user',
+            content: 'An unexpected error occurred. Please try again later.',
             allowedMentions: { parse: [], repliedUser: false }
         });
     });
@@ -381,13 +387,15 @@ describe('alias command error handling', () => {
         vi.mocked(addAlias).mockRejectedValue(new Error('Database connection failed'));
 
         const mockInteraction = {
-            deferReply: vi.fn(),
+            deferred: false,
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
             options: {
                 getString: vi.fn().mockReturnValueOnce('form1').mockReturnValueOnce('n:text'),
             },
             user: { id: 'user1' },
         };
+        mockInteraction.deferReply();
 
         await addExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
@@ -402,13 +410,15 @@ describe('alias command error handling', () => {
         vi.mocked(listAliases).mockRejectedValue(new Error('Database unavailable'));
 
         const mockInteraction = {
-            deferReply: vi.fn(),
+            deferred: false,
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
             user: { id: 'user1' },
             options: {
                 getString: vi.fn().mockReturnValue('form1'),
             },
         };
+        mockInteraction.deferReply();
 
         await listExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
@@ -422,16 +432,19 @@ describe('alias command error handling', () => {
         vi.mocked(removeAlias).mockRejectedValue(new Error('Foreign key constraint'));
 
         const mockInteraction = {
-            deferReply: vi.fn(),
+            deferred: false,
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
             options: {
                 getString: vi.fn().mockReturnValue('alias1'),
             },
             user: { id: 'user1' },
         };
+        mockInteraction.deferReply();
 
         await removeExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
+        expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
             content: 'An unexpected error occurred. Please try again later.',
             allowedMentions: { parse: [], repliedUser: false }
@@ -449,7 +462,7 @@ describe('alias command error handling', () => {
             respond: vi.fn(),
         };
 
-        await expect(autocompleteExecute(mockInteraction as unknown as ChatInputCommandInteraction)).rejects.toThrow('Database error');
-        expect(mockInteraction.respond).not.toHaveBeenCalled();
+        await expect(autocompleteExecute(mockInteraction as unknown as AutocompleteInteraction)).resolves.toBeUndefined();
+        expect(mockInteraction.respond).toHaveBeenCalledWith([]);
     });
 });

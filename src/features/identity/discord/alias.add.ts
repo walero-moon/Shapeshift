@@ -1,4 +1,4 @@
-import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
+import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, MessageFlags, Message } from 'discord.js';
 import { addAlias } from '../app/AddAlias';
 import { DEFAULT_ALLOWED_MENTIONS } from '../../../shared/utils/allowedMentions';
 import { handleInteractionError } from '../../../shared/utils/errorHandling';
@@ -16,7 +16,7 @@ export const data = new SlashCommandSubcommandBuilder()
             .setDescription('The trigger text (must contain "text")')
             .setRequired(true));
 
-export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+export async function execute(interaction: ChatInputCommandInteraction): Promise<Message<boolean> | undefined> {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const formId = interaction.options.getString('form', true);
@@ -25,7 +25,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     try {
         const result = await addAlias(formId, interaction.user.id, { trigger });
 
-        await interaction.editReply({
+        return await interaction.editReply({
             content: `✅ Alias "${result.triggerRaw}" added successfully!`,
             allowedMentions: DEFAULT_ALLOWED_MENTIONS
         });
@@ -37,5 +37,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             channelId: interaction.channel?.id || undefined,
             interactionId: interaction.id
         });
+        return undefined;
     }
 }

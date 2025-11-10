@@ -2,19 +2,22 @@ import { Events } from 'discord.js';
 import { client } from './adapters/discord/client';
 import { registry } from './adapters/discord/registry';
 import { command as pingCommand } from './features/health/discord/ping';
+import { messageCreateProxy } from './adapters/discord/listeners/messageCreate.proxy';
 import log from './shared/utils/logger';
 
 // Register commands with the registry
 import { command as formCommand } from './features/identity/discord/form';
 import { command as aliasCommand } from './features/identity/discord/alias';
+import { command as sendCommand } from './features/proxy/discord/send';
 
 registry.registerCommand(formCommand);
 registry.registerCommand(aliasCommand);
+registry.registerCommand(sendCommand);
 registry.registerCommand(pingCommand);
 
 // Enhanced ready event with comprehensive logging
 client.once(Events.ClientReady, (readyClient) => {
-    log.info(`
+    console.log(`
 🚀 ======================================= 🚀
 ███████╗██╗  ██╗ █████╗ ██████╗ ███████╗███████╗██╗  ██╗██╗███████╗████████╗
 ██╔════╝██║  ██║██╔══██╗██╔══██╗██╔════╝██╔════╝██║  ██║██║██╔════╝╚══██╔══╝
@@ -29,12 +32,7 @@ client.once(Events.ClientReady, (readyClient) => {
 👥 Serving ${readyClient.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0)} total members
 🕐 Started at: ${new Date().toLocaleString()}
 🚀 ======================================= 🚀
-    `, {
-        component: 'bot',
-        status: 'ready',
-        guilds: readyClient.guilds.cache.size,
-        members: readyClient.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0)
-    });
+    `);
 });
 
 // Enhanced interaction handler with better error handling and logging
@@ -155,6 +153,9 @@ process.on('unhandledRejection', (reason, promise) => {
         status: 'fatal'
     });
 });
+
+// Message create event for tag-based proxying
+client.on(Events.MessageCreate, messageCreateProxy);
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {

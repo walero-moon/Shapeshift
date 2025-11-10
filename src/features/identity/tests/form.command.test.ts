@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ChatInputCommandInteraction } from 'discord.js';
+import { ChatInputCommandInteraction, ButtonInteraction, AutocompleteInteraction, ModalSubmitInteraction } from 'discord.js';
 import { command } from '../discord/form';
 import { execute as autocompleteExecute } from '../discord/form.autocomplete';
 import { handleModalSubmit } from '../discord/form.edit';
 import { execute as addExecute } from '../discord/form.add';
 import { execute as listExecute } from '../discord/form.list';
+import { handleButtonInteraction } from '../discord/form.list';
 import { listForms } from '../app/ListForms';
 import { editForm } from '../app/EditForm';
 import { deleteForm } from '../app/DeleteForm';
@@ -39,6 +40,7 @@ vi.mock('../infra/AliasRepo', () => ({
 vi.mock('../app/ListForms', () => ({
     listForms: vi.fn(),
 }));
+
 
 // Mock editForm
 vi.mock('../app/EditForm', () => ({
@@ -86,7 +88,7 @@ describe('form autocomplete', () => {
             respond: vi.fn(),
         };
 
-        await autocompleteExecute(mockInteraction as unknown as ChatInputCommandInteraction);
+        await autocompleteExecute(mockInteraction as unknown as AutocompleteInteraction);
 
         expect(listForms).toHaveBeenCalledWith('user1');
         expect(mockInteraction.respond).toHaveBeenCalledWith([
@@ -114,7 +116,7 @@ describe('form autocomplete', () => {
             respond: vi.fn(),
         };
 
-        await autocompleteExecute(mockInteraction as unknown as ChatInputCommandInteraction);
+        await autocompleteExecute(mockInteraction as unknown as AutocompleteInteraction);
 
         const responded = mockInteraction.respond.mock.calls[0]?.[0] || [];
         expect(responded).toHaveLength(25);
@@ -148,7 +150,7 @@ describe('form edit modal submit', () => {
             editReply: vi.fn(),
         };
 
-        await handleModalSubmit(mockInteraction as unknown as ChatInputCommandInteraction);
+        await handleModalSubmit(mockInteraction as unknown as ModalSubmitInteraction);
 
         expect(editForm).toHaveBeenCalledWith('form1', {
             name: 'Updated Name',
@@ -182,7 +184,7 @@ describe('form edit modal submit', () => {
             editReply: vi.fn(),
         };
 
-        await handleModalSubmit(mockInteraction as unknown as ChatInputCommandInteraction);
+        await handleModalSubmit(mockInteraction as unknown as ModalSubmitInteraction);
 
         // deferUpdate is called first, which acknowledges the interaction
         expect(mockInteraction.deferUpdate).toHaveBeenCalled();
@@ -283,7 +285,7 @@ describe('3s rule compliance for form edit', () => {
             editReply: vi.fn(),
         };
 
-        await handleModalSubmit(mockInteraction as unknown as ChatInputCommandInteraction);
+        await handleModalSubmit(mockInteraction as unknown as ModalSubmitInteraction);
 
         expect(mockInteraction.deferUpdate).toHaveBeenCalled();
         expect(mockInteraction.editReply).toHaveBeenCalled();
@@ -352,13 +354,15 @@ describe('form add error handling', () => {
 
     it('should handle empty form name validation', async () => {
         const mockInteraction = {
-            deferReply: vi.fn(),
+            deferred: false,
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
             options: {
                 getString: vi.fn().mockReturnValueOnce('').mockReturnValueOnce(null),
             },
             user: { id: 'user1' },
         };
+        mockInteraction.deferReply();
 
         await addExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
@@ -372,19 +376,21 @@ describe('form add error handling', () => {
 
     it('should handle invalid avatar URL validation', async () => {
         const mockInteraction = {
-            deferReply: vi.fn(),
+            deferred: false,
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
             options: {
                 getString: vi.fn().mockReturnValueOnce('Test Form').mockReturnValueOnce('invalid-url'),
             },
             user: { id: 'user1' },
         };
+        mockInteraction.deferReply();
 
         await addExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
-            content: expect.stringContaining('Invalid URL format. Please provide a valid URL like https://example.com/image.png'),
+            content: 'Invalid URL format. Please provide a valid URL like https://example.com/image.png',
             allowedMentions: { parse: [], repliedUser: false }
         });
         expect(createForm).not.toHaveBeenCalled();
@@ -394,7 +400,8 @@ describe('form add error handling', () => {
         vi.mocked(createForm).mockRejectedValue(new Error('Database connection failed'));
 
         const mockInteraction = {
-            deferReply: vi.fn(),
+            deferred: false,
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
             options: {
                 getString: vi.fn().mockReturnValueOnce('Test Form').mockReturnValueOnce(null),
@@ -422,7 +429,7 @@ describe('form add error handling', () => {
         };
 
         // Should not throw, but log the error
-        await expect(addExecute(mockInteraction as unknown as ChatInputCommandInteraction)).resolves.toBeUndefined();
+        await expect(addExecute(mockInteraction as unknown as ChatInputCommandInteraction)).rejects.toThrow('Interaction expired');
         expect(mockInteraction.editReply).not.toHaveBeenCalled();
     });
 
@@ -438,7 +445,7 @@ describe('form add error handling', () => {
             user: { id: 'user1' },
         };
 
-        await expect(import('../discord/form.edit').then(m => m.execute(mockInteraction as unknown as ChatInputCommandInteraction))).resolves.toBeUndefined();
+        await expect(import('../discord/form.edit').then(m => m.execute(mockInteraction as unknown as ChatInputCommandInteraction))).rejects.toThrow('Form not found');
         // The execute function throws, but in real Discord it would be caught by the framework
     });
 
@@ -453,7 +460,7 @@ describe('form add error handling', () => {
         };
 
         // Should not throw, but log the error
-        await expect(addExecute(mockInteraction as unknown as ChatInputCommandInteraction)).resolves.toBeUndefined();
+        await expect(addExecute(mockInteraction as unknown as ChatInputCommandInteraction)).rejects.toThrow('Interaction expired');
         expect(mockInteraction.editReply).not.toHaveBeenCalled();
     });
 });
@@ -473,16 +480,16 @@ describe('form edit error handling', () => {
                     .mockReturnValueOnce('https://example.com/avatar.png'),
             },
             deferUpdate: vi.fn(),
+            editReply: vi.fn(),
             reply: vi.fn(),
         };
 
-        await handleModalSubmit(mockInteraction as unknown as ChatInputCommandInteraction);
+        await handleModalSubmit(mockInteraction as unknown as ModalSubmitInteraction);
 
         expect(mockInteraction.deferUpdate).toHaveBeenCalled();
-        expect(mockInteraction.reply).toHaveBeenCalledWith({
+        expect(mockInteraction.editReply).toHaveBeenCalledWith({
             content: 'Form name cannot be empty. Please provide a name for your form.',
-            allowedMentions: { parse: [], repliedUser: false },
-            ephemeral: true
+            allowedMentions: { parse: [], repliedUser: false }
         });
         expect(editForm).not.toHaveBeenCalled();
     });
@@ -497,21 +504,22 @@ describe('form edit error handling', () => {
                     .mockReturnValueOnce('ftp://invalid.com/avatar.png'), // Invalid protocol
             },
             deferUpdate: vi.fn(),
+            editReply: vi.fn(),
             reply: vi.fn(),
         };
 
-        await handleModalSubmit(mockInteraction as unknown as ChatInputCommandInteraction);
+        await handleModalSubmit(mockInteraction as unknown as ModalSubmitInteraction);
 
         expect(mockInteraction.deferUpdate).toHaveBeenCalled();
-        expect(mockInteraction.reply).toHaveBeenCalledWith({
-            content: expect.stringContaining('Invalid URL format. Please provide a valid URL like https://example.com/image.png'),
-            allowedMentions: { parse: [], repliedUser: false },
-            ephemeral: true
+        expect(mockInteraction.editReply).toHaveBeenCalledWith({
+            content: 'Avatar URL must start with http:// or https://. For example: https://example.com/avatar.jpg',
+            allowedMentions: { parse: [], repliedUser: false }
         });
         expect(editForm).not.toHaveBeenCalled();
     });
 
     it('should handle editForm database errors gracefully', async () => {
+        vi.mocked(listForms).mockResolvedValue([{ id: 'form1', name: 'Old Name', avatarUrl: null, createdAt: new Date(), aliases: [] }]);
         vi.mocked(editForm).mockRejectedValue(new Error('Database constraint violation'));
 
         const mockInteraction = {
@@ -522,11 +530,12 @@ describe('form edit error handling', () => {
                     .mockReturnValueOnce('Updated Name')
                     .mockReturnValueOnce(''),
             },
-            deferUpdate: vi.fn(),
+            deferred: false,
+            deferUpdate: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
         };
 
-        await handleModalSubmit(mockInteraction as unknown as ChatInputCommandInteraction);
+        await handleModalSubmit(mockInteraction as unknown as ModalSubmitInteraction);
 
         expect(mockInteraction.deferUpdate).toHaveBeenCalled();
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
@@ -561,7 +570,8 @@ describe('form delete error handling', () => {
         vi.mocked(deleteForm).mockRejectedValue(new Error('Foreign key constraint'));
 
         const mockInteraction = {
-            deferReply: vi.fn(),
+            deferred: false,
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
             options: {
                 getString: vi.fn().mockReturnValue('form1'),
@@ -588,7 +598,8 @@ describe('form list error handling', () => {
         vi.mocked(listForms).mockRejectedValue(new Error('Database unavailable'));
 
         const mockInteraction = {
-            deferReply: vi.fn(),
+            deferred: false,
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
             user: { id: 'user1' },
         };
@@ -606,12 +617,12 @@ describe('form list error handling', () => {
         vi.mocked(listForms).mockRejectedValue(new Error('Connection timeout'));
 
         const mockInteraction = {
-            customId: 'form_list:2',
+            customId: 'form_list:page:2',
             user: { id: 'user1' },
             update: vi.fn(),
         };
 
-        await import('../discord/form.list').then(m => m.handleButtonInteraction(mockInteraction as unknown as ChatInputCommandInteraction));
+        await handleButtonInteraction(mockInteraction as unknown as ButtonInteraction);
 
         expect(mockInteraction.update).toHaveBeenCalledWith({
             content: 'Failed to update page: Connection timeout',
@@ -638,7 +649,7 @@ describe('form autocomplete error handling', () => {
             respond: vi.fn(),
         };
 
-        await expect(autocompleteExecute(mockInteraction as unknown as ChatInputCommandInteraction)).rejects.toThrow('Database error');
+        await expect(autocompleteExecute(mockInteraction as unknown as AutocompleteInteraction)).rejects.toThrow('Database error');
         expect(mockInteraction.respond).not.toHaveBeenCalled();
     });
 });

@@ -1,4 +1,4 @@
-import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
+import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, MessageFlags, Message } from 'discord.js';
 import { removeAlias } from '../app/RemoveAlias';
 import { DEFAULT_ALLOWED_MENTIONS } from '../../../shared/utils/allowedMentions';
 import { handleInteractionError } from '../../../shared/utils/errorHandling';
@@ -11,7 +11,7 @@ export const data = new SlashCommandSubcommandBuilder()
             .setDescription('The ID of the alias to remove')
             .setRequired(true));
 
-export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+export async function execute(interaction: ChatInputCommandInteraction): Promise<Message<boolean> | undefined> {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const aliasId = interaction.options.getString('id', true);
@@ -19,7 +19,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     try {
         await removeAlias(aliasId, interaction.user.id);
 
-        await interaction.editReply({
+        return await interaction.editReply({
             content: `✅ Alias removed successfully!`,
             allowedMentions: DEFAULT_ALLOWED_MENTIONS
         });
@@ -31,5 +31,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             channelId: interaction.channel?.id || undefined,
             interactionId: interaction.id
         });
+        return undefined;
     }
 }

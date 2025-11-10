@@ -1,4 +1,4 @@
-import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
+import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, MessageFlags, Message } from 'discord.js';
 import { createForm } from '../app/CreateForm';
 import { DEFAULT_ALLOWED_MENTIONS } from '../../../shared/utils/allowedMentions';
 import { handleInteractionError, validateUrl } from '../../../shared/utils/errorHandling';
@@ -15,7 +15,7 @@ export const data = new SlashCommandSubcommandBuilder()
             .setDescription('The avatar URL for the form')
             .setRequired(false));
 
-export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+export async function execute(interaction: ChatInputCommandInteraction): Promise<Message<boolean> | undefined> {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const name = interaction.options.getString('name', true);
@@ -23,11 +23,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
     // Validate name
     if (!name.trim()) {
-        await interaction.editReply({
+        return await interaction.editReply({
             content: 'Form name cannot be empty. Please provide a name for your form.',
             allowedMentions: DEFAULT_ALLOWED_MENTIONS
         });
-        return;
     }
 
     // Validate avatar URL if provided
@@ -40,11 +39,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             interactionId: interaction.id
         });
         if (!validation.isValid) {
-            await interaction.editReply({
+            return await interaction.editReply({
                 content: validation.errorMessage || 'Invalid avatar URL.',
                 allowedMentions: DEFAULT_ALLOWED_MENTIONS
             });
-            return;
         }
     }
 
@@ -70,7 +68,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             }
         }
 
-        await interaction.editReply({
+        return await interaction.editReply({
             content: message,
             allowedMentions: DEFAULT_ALLOWED_MENTIONS
         });
@@ -82,5 +80,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             channelId: interaction.channel?.id || undefined,
             interactionId: interaction.id
         });
+        return undefined;
     }
 }

@@ -2,14 +2,14 @@ import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
 import { env } from '../../config/env';
 
-import { CommandInteraction, AutocompleteInteraction, ButtonInteraction, ModalSubmitInteraction } from 'discord.js';
+import { CommandInteraction, AutocompleteInteraction, ButtonInteraction, ModalSubmitInteraction, Message } from 'discord.js';
 
 export interface Command {
     data: {
         name: string;
         toJSON(): unknown;
     };
-    execute(interaction: CommandInteraction): Promise<void>;
+    execute(interaction: CommandInteraction): Promise<Message<boolean> | undefined>;
     autocomplete?: (interaction: AutocompleteInteraction) => Promise<void>;
 }
 
@@ -91,9 +91,11 @@ import { handleButtonInteraction as formListHandleButton } from '../../features/
 import { handleModalSubmit as formEditHandleModal } from '../../features/identity/discord/form.edit';
 import { execute as aliasAutocompleteExecute } from '../../features/identity/discord/alias.autocomplete';
 import { handleButtonInteraction as aliasListHandleButton } from '../../features/identity/discord/alias.list';
+import { execute as sendAutocompleteExecute } from '../../features/proxy/discord/send.autocomplete';
 
 registry.registerAutocomplete('form', formAutocompleteExecute);
 registry.registerButton('form_list', formListHandleButton);
 registry.registerModal('edit_form', formEditHandleModal);
 registry.registerAutocomplete('alias', aliasAutocompleteExecute);
 registry.registerButton('alias_list', aliasListHandleButton);
+registry.registerAutocomplete('send', sendAutocompleteExecute);

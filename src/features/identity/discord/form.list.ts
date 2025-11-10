@@ -3,7 +3,8 @@ import {
     ChatInputCommandInteraction,
     ButtonInteraction,
     EmbedBuilder,
-    MessageFlags
+    MessageFlags,
+    Message
 } from 'discord.js';
 import { listForms } from '../app/ListForms';
 import { DEFAULT_ALLOWED_MENTIONS } from '../../../shared/utils/allowedMentions';
@@ -17,18 +18,17 @@ export const data = new SlashCommandSubcommandBuilder()
     .setName('list')
     .setDescription('List all your forms');
 
-export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+export async function execute(interaction: ChatInputCommandInteraction): Promise<Message<boolean> | undefined> {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
         const forms = await listForms(interaction.user.id);
 
         if (forms.length === 0) {
-            await interaction.editReply({
+            return await interaction.editReply({
                 content: 'You have no forms yet. Create one with `/form add`',
                 allowedMentions: DEFAULT_ALLOWED_MENTIONS
             });
-            return;
         }
 
         const { totalPages, currentPage } = calculatePagination(forms.length, FORMS_PER_PAGE);
@@ -39,7 +39,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             customIdPrefix: 'form_list'
         });
 
-        await interaction.editReply({
+        return await interaction.editReply({
             embeds: [embed],
             components,
             allowedMentions: DEFAULT_ALLOWED_MENTIONS
@@ -52,6 +52,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             channelId: interaction.channel?.id || undefined,
             interactionId: interaction.id
         });
+        return undefined;
     }
 }
 

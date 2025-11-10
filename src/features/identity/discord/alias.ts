@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, Message } from 'discord.js';
 import { data as addData, execute as addExecute } from './alias.add';
 import { data as listData, execute as listExecute } from './alias.list';
 import { data as removeData, execute as removeExecute } from './alias.remove';
@@ -12,7 +12,7 @@ export const command = {
         .addSubcommand(addData)
         .addSubcommand(listData)
         .addSubcommand(removeData),
-    execute: async (interaction: ChatInputCommandInteraction) => {
+    execute: async (interaction: ChatInputCommandInteraction): Promise<Message<boolean> | undefined> => {
         const subcommand = interaction.options.getSubcommand();
 
         try {
@@ -24,9 +24,9 @@ export const command = {
                 case 'remove':
                     return removeExecute(interaction);
                 default:
-                    return interaction.reply({
-                        content: 'Unknown subcommand.',
-                        ephemeral: true
+                    await interaction.deferReply({ ephemeral: true });
+                    return await interaction.editReply({
+                        content: 'Unknown subcommand.'
                     });
             }
         } catch (error) {
@@ -37,6 +37,7 @@ export const command = {
                 channelId: interaction.channel?.id || undefined,
                 interactionId: interaction.id
             });
+            return undefined;
         }
     },
     autocomplete: autocompleteExecute
