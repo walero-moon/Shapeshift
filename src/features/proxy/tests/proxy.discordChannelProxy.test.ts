@@ -90,9 +90,8 @@ describe('DiscordChannelProxy', () => {
 
     describe('send method', () => {
         it('should send message successfully with wait=true', async () => {
-            const mockWebhookResponse = { id: 'webhook456', token: 'token789' };
             const mockMessageResponse = { id: 'msg123' };
-            vi.mocked(client.rest.post).mockResolvedValueOnce(mockWebhookResponse).mockResolvedValueOnce(mockMessageResponse);
+            vi.mocked(client.rest.post).mockResolvedValue(mockMessageResponse);
 
             const result = await proxy.send({
                 username: 'TestUser',
@@ -150,12 +149,10 @@ describe('DiscordChannelProxy', () => {
         });
 
         it('should handle 429 rate limit by retrying', async () => {
-            const mockWebhookResponse = { id: 'webhook456', token: 'token789' };
             const mockError = { code: 429, retry_after: 1000 };
             const mockMessageResponse = { id: 'msg123' };
 
             vi.mocked(client.rest.post)
-                .mockResolvedValueOnce(mockWebhookResponse)
                 .mockRejectedValueOnce(mockError)
                 .mockResolvedValueOnce(mockMessageResponse);
 
@@ -171,12 +168,9 @@ describe('DiscordChannelProxy', () => {
         });
 
         it('should throw after max retries on 429', async () => {
-            const mockWebhookResponse = { id: 'webhook456', token: 'token789' };
             const mockError = { code: 429, retry_after: 1000 };
 
-            vi.mocked(client.rest.post)
-                .mockResolvedValueOnce(mockWebhookResponse)
-                .mockRejectedValue(mockError);
+            vi.mocked(client.rest.post).mockRejectedValue(mockError);
 
             await expect(proxy.send({
                 username: 'TestUser',
@@ -200,7 +194,14 @@ describe('DiscordChannelProxy', () => {
         });
 
         it('should throw on webhook creation failure', async () => {
-            vi.mocked(mockChannel.createWebhook).mockRejectedValue(new Error('Webhook creation failed'));
+            // Mock webhookRegistry to throw
+            const mockWebhookRegistry = {
+                getWebhook: vi.fn().mockRejectedValue(new Error('Webhook creation failed'))
+            };
+            Object.defineProperty(DiscordChannelProxy, 'webhookRegistry', {
+                value: mockWebhookRegistry,
+                writable: true
+            });
 
             await expect(proxy.send({
                 username: 'TestUser',
@@ -211,7 +212,7 @@ describe('DiscordChannelProxy', () => {
         });
 
         it('should throw on webhook execution failure', async () => {
-            vi.mocked(client.rest.post).mockRejectedValue(new Error('Webhook execution failed'));
+            vi.mocked(client.rest.post).mockResolvedValue({ id: 'webhook456', token: 'token789' }).mockRejectedValueOnce(new Error('Webhook execution failed'));
 
             await expect(proxy.send({
                 username: 'TestUser',
@@ -219,6 +220,38 @@ describe('DiscordChannelProxy', () => {
                 allowedMentions: { parse: [], repliedUser: false },
                 attachments: [],
             })).rejects.toThrow('Webhook execution failed');
+        });
+
+        it('should handle fetch failure gracefully for reply-style', async () => {
+            const mockWebhookResponse = { id: 'webhook456', token: 'token789' };
+            const mockMessageResponse = { id: 'msg123' };
+            vi.mocked(client.rest.post).mockResolvedValueOnce(mockWebhookResponse).mockResolvedValueOnce(mockMessageResponse);
+
+            // Mock channel fetch to fail
+            vi.mocked(client.channels.fetch).mockRejectedValue(new Error('Channel fetch failed'));
+
+            const result = await proxy.send({
+                username: 'TestUser',
+                content: 'Hello world',
+                allowedMentions: { parse: [], repliedUser: false },
+                attachments: [],
+            }, { guildId: 'guild123', channelId: 'channel456', messageId: 'msg789' });
+
+            // Should still succeed but without reply-style
+            expect(result).toEqual({
+                webhookId: 'webhook456',
+                webhookToken: 'token789',
+                messageId: 'msg123',
+            });
+
+            // Verify webhook payload doesn't include reply-style components
+            const webhookCall = vi.mocked(client.rest.post).mock.calls[1];
+            expect(webhookCall).toBeDefined();
+            if (webhookCall) {
+                const payload = webhookCall[1]?.body as any;
+                expect(payload.content).toBe('Hello world'); // No header/quote
+                expect(payload.components).toEqual([]); // No jump button
+            }
         });
     });
 

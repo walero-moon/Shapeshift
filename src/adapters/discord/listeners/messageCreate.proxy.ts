@@ -151,6 +151,30 @@ export async function messageCreateProxy(message: Message) {
         // Create channel proxy instance
         const channelProxy = new DiscordChannelProxy(message.channelId);
 
+        // Check for reply context
+        let replyTo: { guildId: string; channelId: string; messageId: string } | undefined;
+        if (message.reference && message.reference.guildId && message.reference.channelId && message.reference.messageId) {
+            replyTo = {
+                guildId: message.reference.guildId,
+                channelId: message.reference.channelId,
+                messageId: message.reference.messageId
+            };
+            console.log('🔍 DEBUG: replyTo detected', replyTo);
+            log.debug('Reply context detected', {
+                component: 'proxy',
+                userId: message.author.id,
+                replyTo,
+                status: 'reply_context_detected'
+            });
+        } else {
+            console.log('🔍 DEBUG: no replyTo context');
+            log.debug('No reply context', {
+                component: 'proxy',
+                userId: message.author.id,
+                status: 'no_reply_context'
+            });
+        }
+
         // Proxy the message via coordinator
         await proxyCoordinator(
             message.author.id,
@@ -159,7 +183,8 @@ export async function messageCreateProxy(message: Message) {
             message.guildId,
             match.renderedText,
             channelProxy,
-            message.attachments.map(attachment => attachment)
+            message.attachments.map(attachment => attachment),
+            replyTo
         );
 
         log.info('Message proxied successfully via tag', {

@@ -1,0 +1,50 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`assembleWebhookPayload > should assemble payload with reply-style 1`] = `
+{
+  "allowedMentions": {
+    "parse": [],
+  },
+  "components": [
+    {
+      "components": [
+        {
+          "emoji": undefined,
+          "label": "Jump",
+          "style": 5,
+          "type": 2,
+          "url": "https://discord.com/channels/123/456/789",
+        },
+      ],
+      "type": 1,
+    },
+  ],
+  "content": "*↩︎ Replying to @User*
+> This is a quote
+
+Hello world",
+}
+`;
+
+exports[`assembleWebhookPayload > should assemble payload with reply-style but no jump button 1`] = `
+{
+  "allowedMentions": {
+    "parse": [],
+  },
+  "components": [],
+  "content": "*↩︎ Replying to @User*
+> This is a quote
+
+Hello world",
+}
+`;
+
+exports[`assembleWebhookPayload > should assemble payload without reply-style 1`] = `
+{
+  "allowedMentions": {
+    "parse": [],
+  },
+  "components": [],
+  "content": "Hello world",
+}
+`;

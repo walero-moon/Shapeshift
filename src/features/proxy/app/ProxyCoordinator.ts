@@ -18,7 +18,8 @@ export async function proxyCoordinator(
     guildId: string,
     body: string,
     channelProxy: ChannelProxyPort,
-    attachments?: Attachment[]
+    attachments?: Attachment[],
+    _replyTo?: { guildId: string; channelId: string; messageId: string }
 ): Promise<{ webhookId: string; token: string; messageId: string }> {
     try {
         log.info('Starting proxy coordination', {
@@ -54,7 +55,18 @@ export async function proxyCoordinator(
             sendData.attachments = payload.attachments;
         }
 
-        const sendResult = await channelProxy.send(sendData);
+        log.debug('Sending message via channel proxy', {
+            component: 'proxy',
+            userId,
+            formId,
+            guildId,
+            channelId,
+            hasReplyTo: !!_replyTo,
+            replyTo: _replyTo,
+            status: 'sending_via_proxy'
+        });
+
+        const sendResult = await channelProxy.send(sendData, _replyTo);
 
         // Persist proxied message
         const proxiedMessageId = await generateUuidv7OrUndefined();

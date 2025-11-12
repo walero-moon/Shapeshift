@@ -2,9 +2,11 @@ import { Routes } from 'discord-api-types/v10';
 import { setTimeout } from 'timers/promises';
 import { client } from './client';
 import { ChannelProxyPort, SendMessageData, EditMessageData } from '../../shared/ports/ChannelProxyPort';
-import { handleWebhookError } from '../../shared/utils/errorHandling';
+import { handleWebhookError, handleDegradedModeError } from '../../shared/utils/errorHandling';
 import log, { type LogContext } from '../../shared/utils/logger';
 import { WebhookRegistry } from './WebhookRegistry';
+import { buildReplyStyle } from '../../features/proxy/app/BuildReplyStyle';
+import { assembleWebhookPayload } from '../../features/proxy/discord/send.util';
 
 export class DiscordChannelProxy implements ChannelProxyPort {
     private channelId: string;
@@ -14,7 +16,7 @@ export class DiscordChannelProxy implements ChannelProxyPort {
         this.channelId = channelId;
     }
 
-    async send(data: SendMessageData): Promise<{ webhookId: string; webhookToken: string; messageId: string }> {
+    async send(data: SendMessageData, replyTo?: { guildId: string; channelId: string; messageId: string } | null): Promise<{ webhookId: string; webhookToken: string; messageId: string }> {
         const context: LogContext = {
             component: 'DiscordChannelProxy',
             channelId: this.channelId,
@@ -23,17 +25,70 @@ export class DiscordChannelProxy implements ChannelProxyPort {
 
         // For send, we need the result, so we don't use handleWebhookError as it can return undefined
         try {
+            // Validate channel is text-based
+            const channel = await client.channels.fetch(this.channelId);
+            if (!channel?.isTextBased()) {
+                throw new Error('Invalid or non-text channel');
+            }
+
             // Get or create persistent webhook for this channel
             const { id: webhookId, token: webhookToken } = await DiscordChannelProxy.webhookRegistry.getWebhook(this.channelId);
+
+            let content = data.content.length > 2000 ? data.content.slice(0, 2000) : data.content;
+            let replyStyle = null;
+
+            if (replyTo) {
+                log.debug('Processing reply context', {
+                    ...context,
+                    replyTo,
+                    status: 'processing_reply'
+                });
+
+                // Fetch target message for reply-style
+                const targetMessage = await handleDegradedModeError(
+                    async () => {
+                        const channel = await client.channels.fetch(replyTo.channelId);
+                        if (!channel?.isTextBased()) throw new Error('Channel not found or not text-based');
+                        return await channel.messages.fetch(replyTo.messageId);
+                    },
+                    context,
+                    null,
+                    'fetch target message for reply'
+                );
+
+                log.debug('Target message fetched', {
+                    ...context,
+                    targetAuthor: targetMessage?.author?.displayName,
+                    targetContentLength: targetMessage?.content?.length,
+                    hasEmbeds: (targetMessage?.embeds?.length ?? 0) > 0,
+                    hasAttachments: (targetMessage?.attachments?.size ?? 0) > 0,
+                    status: 'target_message_fetched'
+                });
+
+                replyStyle = buildReplyStyle(
+                    targetMessage?.author?.displayName || null,
+                    targetMessage?.url || null,
+                    targetMessage?.content || '',
+                    (targetMessage?.embeds?.length ?? 0) > 0,
+                    (targetMessage?.attachments?.size ?? 0) > 0
+                );
+
+                log.debug('Reply style built', {
+                    ...context,
+                    headerLine: replyStyle.headerLine,
+                    status: 'reply_style_built'
+                });
+            }
+
+            const payload = assembleWebhookPayload(content, replyStyle);
 
             // Execute webhook with message data
             const result = await this.executeWithRetry(() =>
                 client.rest.post(`/webhooks/${webhookId}/${webhookToken}?wait=true`, {
                     body: {
-                        content: data.content.length > 2000 ? data.content.slice(0, 2000) : data.content,
+                        ...payload,
                         username: data.username,
                         avatar_url: data.avatarUrl,
-                        allowed_mentions: data.allowedMentions,
                         files: data.attachments
                     }
                 })
