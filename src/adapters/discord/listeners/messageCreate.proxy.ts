@@ -5,6 +5,7 @@ import { proxyCoordinator } from '../../../features/proxy/app/ProxyCoordinator';
 import { formRepo } from '../../../features/identity/infra/FormRepo';
 import { DiscordChannelProxy } from '../DiscordChannelProxy';
 import { log } from '../../../shared/utils/logger';
+import { handleDegradedModeError } from '../../../shared/utils/errorHandling';
 
 /**
  * Message create listener for tag-based proxying
@@ -196,6 +197,29 @@ export async function messageCreateProxy(message: Message) {
             channelId: message.channelId,
             status: 'proxy_success'
         });
+
+        // Delete the original user message after successful proxying
+        await handleDegradedModeError(
+            async () => {
+                await message.delete();
+                log.debug('Original message deleted after successful proxy', {
+                    component: 'proxy',
+                    userId: message.author.id,
+                    guildId: message.guildId || undefined,
+                    channelId: message.channelId,
+                    status: 'original_message_deleted'
+                });
+            },
+            {
+                component: 'proxy',
+                userId: message.author.id,
+                guildId: message.guildId || undefined,
+                channelId: message.channelId,
+                status: 'degraded_mode_fallback'
+            },
+            undefined,
+            'Failed to delete original message after proxy'
+        );
 
     } catch (error) {
         log.error('Failed to proxy message via tag', {
