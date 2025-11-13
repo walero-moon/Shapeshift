@@ -60,6 +60,7 @@ describe('messageCreateProxy function', () => {
             channelId: 'channel456',
             guildId: 'guild789',
             attachments: [],
+            reference: null,
             channel: { id: 'channel456', isTextBased: () => true } as any,
         } as unknown as Message<boolean>;
 
@@ -70,6 +71,7 @@ describe('messageCreateProxy function', () => {
         };
 
         vi.mocked(DiscordChannelProxy).mockImplementation(() => mockChannelProxy as DiscordChannelProxy);
+        vi.mocked(reuploadAttachments).mockResolvedValue([]);
     });
 
     it('should skip bot messages', async () => {
@@ -237,6 +239,67 @@ describe('messageCreateProxy function', () => {
             mockChannelProxy,
             mockReuploadedAttachments,
             undefined
+        );
+    });
+
+    it('should handle reply messages with jump button and quote', async () => {
+        const mockMatch = {
+            alias: {
+                id: 'alias1',
+                userId: 'user123',
+                formId: 'form1',
+                triggerRaw: 'n:text',
+                triggerNorm: 'n:text',
+                kind: 'prefix' as const,
+                createdAt: new Date(),
+            },
+            renderedText: 'hello world',
+        };
+
+        const mockForm = {
+            id: 'form1',
+            userId: 'user123',
+            name: 'Neoli',
+            avatarUrl: null,
+            createdAt: new Date(),
+        };
+
+        // Reset attachments for this test
+        (mockMessage.attachments as any) = [];
+
+        // Mock message with reference (reply)
+        mockMessage.reference = {
+            messageId: 'replyMsgId',
+            channelId: 'channel456',
+            guildId: 'guild789',
+            type: 0,
+        } as any;
+
+        vi.mocked(matchAlias).mockResolvedValue(mockMatch);
+        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
+        vi.mocked(validateUserChannelPerms).mockResolvedValue(true);
+        vi.mocked(proxyCoordinator).mockResolvedValue({
+            webhookId: 'webhook123',
+            token: 'token456',
+            messageId: 'msg789',
+        });
+
+        await messageCreateProxy(mockMessage);
+
+        // Verify proxyCoordinator was called with replyTo
+        expect(proxyCoordinator).toHaveBeenCalledWith(
+            'user123',
+            'form1',
+            'channel456',
+            'guild789',
+            'hello world',
+            mockChannelProxy,
+            [],
+            {
+                guildId: 'guild789',
+                channelId: 'channel456',
+                messageId: 'replyMsgId',
+            }
         );
     });
 

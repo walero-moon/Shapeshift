@@ -13,32 +13,41 @@ describe('buildReplyStyle', () => {
         vi.clearAllMocks();
     });
 
-    describe('header generation', () => {
-        it('should generate header with displayName and content', () => {
+    describe('reply style generation', () => {
+        it('should generate header, quote, and jumpUrl with userId and messageUrl', () => {
             vi.mocked(createSnippet).mockReturnValue('test snippet');
 
             const result = buildReplyStyle('JohnDoe', 'https://discord.com/channels/123/456/789', 'Hello', false, false);
 
-            expect(result.headerLine).toBe('-# ↩︎ **@JohnDoe** test snippet');
+            expect(result.headerLine).toBe('-# ↩︎ Replying to <@JohnDoe>');
+            expect(result.quoteLine).toBe('test snippet');
+            expect(result.jumpUrl).toBe('https://discord.com/channels/123/456/789');
+            expect(result.allowedMentions).toEqual({ parse: ['users'], repliedUser: false });
         });
 
-        it('should generate header with displayName only', () => {
+        it('should generate header and quote with userId but no messageUrl', () => {
             vi.mocked(createSnippet).mockReturnValue('test snippet');
 
             const result = buildReplyStyle('JohnDoe', null, 'Hello', false, false);
 
-            expect(result.headerLine).toBe('-# ↩︎ **@JohnDoe** test snippet');
+            expect(result.headerLine).toBe('-# ↩︎ Replying to <@JohnDoe>');
+            expect(result.quoteLine).toBe('test snippet');
+            expect(result.jumpUrl).toBeUndefined();
+            expect(result.allowedMentions).toEqual({ parse: ['users'], repliedUser: false });
         });
 
-        it('should generate generic header when no displayName', () => {
+        it('should generate header and quote without userId but with messageUrl', () => {
             vi.mocked(createSnippet).mockReturnValue('test snippet');
 
             const result = buildReplyStyle(null, 'https://discord.com/channels/123/456/789', 'Hello', false, false);
 
-            expect(result.headerLine).toBe('-# ↩︎ test snippet');
+            expect(result.headerLine).toBe('-# ↩︎ Replying');
+            expect(result.quoteLine).toBe('test snippet');
+            expect(result.jumpUrl).toBe('https://discord.com/channels/123/456/789');
+            expect(result.allowedMentions).toEqual({ parse: ['users'], repliedUser: false });
         });
 
-        it('should use createSnippet for content and trim if needed', () => {
+        it('should use createSnippet for content and trim quote if needed', () => {
             vi.mocked(createSnippet).mockReturnValue('This is a quote');
 
             const result = buildReplyStyle('JohnDoe', null, 'Hello world', false, false);
@@ -48,7 +57,8 @@ describe('buildReplyStyle', () => {
                 embeds: undefined,
                 attachments: undefined,
             });
-            expect(result.headerLine).toBe('-# ↩︎ **@JohnDoe** This is a quote');
+            expect(result.headerLine).toBe('-# ↩︎ Replying to <@JohnDoe>');
+            expect(result.quoteLine).toBe('This is a quote');
         });
 
         it('should pass embeds placeholder to createSnippet', () => {
@@ -61,7 +71,7 @@ describe('buildReplyStyle', () => {
                 embeds: [{} as unknown],
                 attachments: undefined,
             });
-            expect(result.headerLine).toBe('-# ↩︎ **@JohnDoe** [embed]');
+            expect(result.quoteLine).toBe('[embed]');
         });
 
         it('should pass attachments placeholder to createSnippet', () => {
@@ -74,17 +84,18 @@ describe('buildReplyStyle', () => {
                 embeds: undefined,
                 attachments: [{} as unknown],
             });
-            expect(result.headerLine).toBe('-# ↩︎ **@JohnDoe** [image]');
+            expect(result.quoteLine).toBe('[image]');
         });
 
-        it('should trim content if total exceeds 2000 chars', () => {
-            const longSnippet = 'a'.repeat(1950); // Make it long enough to trigger trimming
+        it('should trim quote if header + quote + newline exceeds 2000 chars', () => {
+            const longSnippet = 'a'.repeat(1980); // Make it long enough to trigger trimming
             vi.mocked(createSnippet).mockReturnValue(longSnippet);
 
-            const result = buildReplyStyle('JohnDoe', null, 'a'.repeat(1950), false, false);
+            const result = buildReplyStyle('JohnDoe', null, 'a'.repeat(1980), false, false);
 
-            expect(result.headerLine.length).toBeLessThanOrEqual(2000);
-            expect(result.headerLine).toContain('...');
+            const totalLength = result.headerLine.length + result.quoteLine.length + 1; // +1 for newline
+            expect(totalLength).toBeLessThanOrEqual(2000);
+            expect(result.quoteLine).toContain('...');
         });
 
         it('should not trim if within limits', () => {
@@ -93,7 +104,8 @@ describe('buildReplyStyle', () => {
 
             const result = buildReplyStyle('JohnDoe', null, 'Hello', false, false);
 
-            expect(result.headerLine).toBe('-# ↩︎ **@JohnDoe** Short quote');
+            expect(result.headerLine).toBe('-# ↩︎ Replying to <@JohnDoe>');
+            expect(result.quoteLine).toBe('Short quote');
         });
     });
 });

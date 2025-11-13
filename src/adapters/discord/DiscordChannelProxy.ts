@@ -84,9 +84,6 @@ export class DiscordChannelProxy implements ChannelProxyPort {
 
             const payload = assembleWebhookPayload(content, replyStyle);
 
-            // Override allowed_mentions for reply-style messages to allow user pings
-            const allowedMentions = replyStyle ? replyStyle.allowedMentions : payload.allowedMentions;
-
             // Convert ProxyAttachment[] to Discord webhook file format
             const webhookFiles = data.attachments?.map((attachment: ProxyAttachment) => ({
                 name: attachment.name,
@@ -97,10 +94,11 @@ export class DiscordChannelProxy implements ChannelProxyPort {
             const result = await this.executeWithRetry(() =>
                 client.rest.post(`/webhooks/${webhookId}/${webhookToken}?wait=true`, {
                     body: {
-                        ...payload,
+                        content: payload.content,
+                        components: payload.components,
                         username: data.username,
                         avatar_url: data.avatarUrl,
-                        allowed_mentions: allowedMentions,
+                        allowed_mentions: payload.allowedMentions,
                         files: webhookFiles
                     }
                 })

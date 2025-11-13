@@ -1,9 +1,9 @@
 import { createSnippet } from '../../../shared/utils/snippet';
 
 /**
- * Builds reply-style header for webhook messages.
- * Pure function that creates a small header with reply icon, user, and content.
- * Ensures content is trimmed to fit within Discord's 2000 character limit.
+ * Builds reply-style metadata for webhook messages.
+ * Pure function that creates header, quote snippet, and jump URL.
+ * Ensures header + quote combined stay under 2000 characters.
  */
 export function buildReplyStyle(
     userId: string | null,
@@ -13,7 +13,8 @@ export function buildReplyStyle(
     hasAttachments: boolean
 ): {
     headerLine: string;
-    quoteLine?: string;
+    quoteLine: string;
+    jumpUrl?: string;
     allowedMentions: object;
 } {
     // Build content snippet
@@ -23,25 +24,16 @@ export function buildReplyStyle(
         ...(hasAttachments && { attachments: [{} as unknown] }),
     });
 
-    // Build header with user and content
-    let headerText: string;
-    if (userId) {
-        // Trim content to fit within 2000 chars (header prefix + user + content + hyperlink markup)
-        const prefix = `-# ↩︎ Replying to <@${userId}> **🡒** `;
-        const maxContentLength = 2000 - prefix.length - (messageUrl ? 4 : 0); // 4 for `[]()` markdown
-        const trimmedContent = snippet.length > maxContentLength
-            ? snippet.substring(0, maxContentLength - 3) + '...'
-            : snippet;
-        headerText = `${prefix}[${trimmedContent}](${messageUrl})`;
-    } else {
-        // Fallback without user
-        const prefix = `-# ↩︎ Replying **🡒** `;
-        const maxContentLength = 2000 - prefix.length - (messageUrl ? 4 : 0);
-        const trimmedContent = snippet.length > maxContentLength
-            ? snippet.substring(0, maxContentLength - 3) + '...'
-            : snippet;
-        headerText = `${prefix}[${trimmedContent}](${messageUrl})`;
-    }
+    // Build header
+    const headerLine = userId
+        ? `-# ↩︎ Replying to <@${userId}>`
+        : `-# ↩︎ Replying`;
+
+    // Quote line is the snippet, truncated if needed to fit within 2000 chars combined
+    const maxQuoteLength = 2000 - headerLine.length - 1; // -1 for newline
+    const quoteLine = snippet.length > maxQuoteLength
+        ? snippet.substring(0, maxQuoteLength - 3) + '...'
+        : snippet;
 
     // For reply-style, we need to allow user mentions in the header
     const allowedMentions = {
@@ -49,11 +41,20 @@ export function buildReplyStyle(
         repliedUser: false,
     };
 
-    // Wrap entire header in hyperlink if URL available
-    const headerLine = messageUrl ? `${headerText}` : headerText;
-
-    return {
+    const result: {
+        headerLine: string;
+        quoteLine: string;
+        jumpUrl?: string;
+        allowedMentions: object;
+    } = {
         headerLine,
+        quoteLine,
         allowedMentions,
     };
+
+    if (messageUrl) {
+        result.jumpUrl = messageUrl;
+    }
+
+    return result;
 }
