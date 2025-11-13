@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, vi, Mocked } from 'vitest';
 import { sendAsForm, SendAsFormInput } from '../app/SendAsForm';
 import { DEFAULT_ALLOWED_MENTIONS } from '../../../shared/utils/allowedMentions';
-import { ChannelProxyPort } from '../../../shared/ports/ChannelProxyPort';
-import { Attachment } from 'discord.js';
+import { ChannelProxyPort, ProxyAttachment } from '../../../shared/ports/ChannelProxyPort';
 
 // Mock the logger
 vi.mock('../../../shared/utils/logger', () => ({
@@ -109,8 +108,8 @@ describe('sendAsForm function', () => {
         mockChannelProxy.send.mockResolvedValue(mockResult);
 
         const mockAttachments = [
-            { id: 'att1', url: 'https://example.com/file1.png', name: 'file1.png' },
-            { id: 'att2', url: 'https://example.com/file2.jpg', name: 'file2.jpg' },
+            { name: 'file1.png', data: Buffer.from('test file 1') },
+            { name: 'file2.jpg', data: Buffer.from('test file 2') },
         ];
 
         const input: SendAsFormInput = {
@@ -123,7 +122,7 @@ describe('sendAsForm function', () => {
                 createdAt: new Date(),
             },
             text: 'Hello with attachments!',
-            attachments: mockAttachments as Attachment[],
+            attachments: mockAttachments as ProxyAttachment[],
             channelContext: {
                 guildId: 'guild1',
                 channelId: 'channel1',

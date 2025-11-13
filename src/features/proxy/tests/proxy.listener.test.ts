@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Message } from 'discord.js';
 import { messageCreateProxy } from '../../../adapters/discord/listeners/messageCreate.proxy';
-import { ChannelProxyPort } from '../../../shared/ports/ChannelProxyPort';
+import { ChannelProxyPort, ProxyAttachment } from '../../../shared/ports/ChannelProxyPort';
 
 // Mock dependencies
 vi.mock('../../../features/proxy/app/MatchAlias', () => ({
@@ -14,6 +14,10 @@ vi.mock('../../../features/proxy/app/ValidateUserChannelPerms', () => ({
 
 vi.mock('../../../features/proxy/app/ProxyCoordinator', () => ({
     proxyCoordinator: vi.fn(),
+}));
+
+vi.mock('../../../shared/utils/attachments', () => ({
+    reuploadAttachments: vi.fn(),
 }));
 
 vi.mock('../../../features/identity/infra/FormRepo', () => ({
@@ -41,6 +45,7 @@ import { validateUserChannelPerms } from '../../../features/proxy/app/ValidateUs
 import { proxyCoordinator } from '../../../features/proxy/app/ProxyCoordinator';
 import { formRepo } from '../../../features/identity/infra/FormRepo';
 import { DiscordChannelProxy } from '../../../adapters/discord/DiscordChannelProxy';
+import { reuploadAttachments } from '../../../shared/utils/attachments';
 
 describe('messageCreateProxy function', () => {
     let mockMessage: Message<boolean>;
@@ -187,20 +192,22 @@ describe('messageCreateProxy function', () => {
             createdAt: new Date(),
         };
 
-        const mockAttachments = [
+        const mockDiscordAttachments = [
             {
                 id: 'att1',
                 url: 'https://example.com/file.png',
                 name: 'file.png',
-                size: 1024,
-                contentType: 'image/png',
-                proxyURL: 'https://cdn.example.com/file.png',
-                height: 100,
-                width: 100,
             },
         ];
 
-        (mockMessage.attachments as unknown) = mockAttachments.map(att => ({
+        const mockReuploadedAttachments: ProxyAttachment[] = [
+            {
+                name: 'file.png',
+                data: Buffer.from('test file content'),
+            },
+        ];
+
+        (mockMessage.attachments as unknown) = mockDiscordAttachments.map(att => ({
             ...att,
             toJSON: () => att,
         }));
@@ -208,6 +215,7 @@ describe('messageCreateProxy function', () => {
         vi.mocked(matchAlias).mockResolvedValue(mockMatch);
         vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
         vi.mocked(validateUserChannelPerms).mockResolvedValue(true);
+        vi.mocked(reuploadAttachments).mockResolvedValue(mockReuploadedAttachments);
         vi.mocked(proxyCoordinator).mockResolvedValue({
             webhookId: 'webhook123',
             token: 'token456',
@@ -216,6 +224,10 @@ describe('messageCreateProxy function', () => {
 
         await messageCreateProxy(mockMessage);
 
+        // Verify reuploadAttachments was called with Discord attachment format
+        expect(reuploadAttachments).toHaveBeenCalledWith(mockDiscordAttachments);
+
+        // Verify proxyCoordinator was called with ProxyAttachment format
         expect(proxyCoordinator).toHaveBeenCalledWith(
             'user123',
             'form1',
@@ -223,7 +235,8 @@ describe('messageCreateProxy function', () => {
             'guild789',
             'hello world',
             mockChannelProxy,
-            expect.any(Array)
+            mockReuploadedAttachments,
+            undefined
         );
     });
 

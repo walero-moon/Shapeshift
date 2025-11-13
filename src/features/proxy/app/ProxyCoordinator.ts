@@ -1,10 +1,9 @@
 import { formRepo } from '../../identity/infra/FormRepo';
 import { buildProxyMessage } from './BuildProxyMessage';
-import { ChannelProxyPort, SendMessageData } from '../../../shared/ports/ChannelProxyPort';
+import { ChannelProxyPort, SendMessageData, ProxyAttachment } from '../../../shared/ports/ChannelProxyPort';
 import { proxiedMessageRepo } from '../infra/ProxiedMessageRepo';
 import { generateUuidv7OrUndefined } from '../../../shared/db/uuidDetection';
 import { log } from '../../../shared/utils/logger';
-import { Attachment } from 'discord.js';
 
 /**
  * Orchestrates the proxying process: fetch form, build payload, send via port, persist proxied message.
@@ -18,7 +17,7 @@ export async function proxyCoordinator(
     guildId: string,
     body: string,
     channelProxy: ChannelProxyPort,
-    attachments?: Attachment[],
+    attachments?: ProxyAttachment[], // Reuploaded attachments in standardized format
     _replyTo?: { guildId: string; channelId: string; messageId: string }
 ): Promise<{ webhookId: string; token: string; messageId: string }> {
     try {

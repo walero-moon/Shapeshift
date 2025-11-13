@@ -6,6 +6,7 @@ import { formRepo } from '../../../features/identity/infra/FormRepo';
 import { DiscordChannelProxy } from '../DiscordChannelProxy';
 import { log } from '../../../shared/utils/logger';
 import { handleDegradedModeError } from '../../../shared/utils/errorHandling';
+import { reuploadAttachments } from '../../../shared/utils/attachments';
 
 /**
  * Message create listener for tag-based proxying
@@ -123,11 +124,14 @@ export async function messageCreateProxy(message: Message) {
             return;
         }
 
+        // Collect Discord.js attachments
+        const discordAttachments = Array.from(message.attachments.values());
+
         // Validate user permissions in the channel
         const hasPerms = await validateUserChannelPerms(
             message.author.id,
             message.channel as TextChannel,
-            message.attachments.map(attachment => attachment)
+            discordAttachments
         );
 
         log.debug('Permission check result', {
@@ -148,6 +152,15 @@ export async function messageCreateProxy(message: Message) {
             });
             return;
         }
+
+        // Reupload Discord attachments to standardized format
+        const standardizedAttachments = await reuploadAttachments(
+            discordAttachments.map(attachment => ({
+                name: attachment.name,
+                url: attachment.url,
+                id: attachment.id
+            }))
+        );
 
         // Create channel proxy instance
         const channelProxy = new DiscordChannelProxy(message.channelId);
@@ -176,7 +189,7 @@ export async function messageCreateProxy(message: Message) {
             });
         }
 
-        // Proxy the message via coordinator
+        // Proxy the message via coordinator with standardized attachments
         await proxyCoordinator(
             message.author.id,
             form.id,
@@ -184,7 +197,7 @@ export async function messageCreateProxy(message: Message) {
             message.guildId,
             match.renderedText,
             channelProxy,
-            message.attachments.map(attachment => attachment),
+            standardizedAttachments,
             replyTo
         );
 

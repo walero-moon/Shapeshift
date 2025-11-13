@@ -1,7 +1,6 @@
-import { ChannelProxyPort, SendMessageData } from '../../../shared/ports/ChannelProxyPort';
+import { ChannelProxyPort, SendMessageData, ProxyAttachment } from '../../../shared/ports/ChannelProxyPort';
 import { DEFAULT_ALLOWED_MENTIONS } from '../../../shared/utils/allowedMentions';
 import { log } from '../../../shared/utils/logger';
-import { Attachment } from 'discord.js';
 
 export interface Form {
     id: string;
@@ -20,7 +19,7 @@ export interface SendAsFormInput {
     userId: string;
     form: Form;
     text: string;
-    attachments?: Attachment[]; // Discord.js attachment objects
+    attachments?: ProxyAttachment[]; // Reuploaded attachments in standardized format
     channelContext: ChannelContext;
 }
 

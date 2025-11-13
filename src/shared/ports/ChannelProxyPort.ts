@@ -1,17 +1,26 @@
-import { MessageMentionOptions, Attachment } from 'discord.js';
+// Discord-agnostic attachment format
+export interface ProxyAttachment {
+    name: string;
+    data: Buffer;
+}
+
+export interface AllowedMentions {
+    parse?: ('users' | 'roles' | 'everyone')[];
+    repliedUser?: boolean;
+}
 
 export interface SendMessageData {
     username: string;
     avatarUrl?: string;
     content: string;
-    attachments?: Attachment[];
-    allowedMentions: MessageMentionOptions;
+    attachments?: ProxyAttachment[];
+    allowedMentions: AllowedMentions;
 }
 
 export interface EditMessageData {
     content: string;
-    attachments?: Attachment[];
-    allowedMentions: MessageMentionOptions;
+    attachments?: ProxyAttachment[];
+    allowedMentions: AllowedMentions;
 }
 
 export interface ChannelProxyPort {

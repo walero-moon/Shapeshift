@@ -1,7 +1,7 @@
 import { Routes } from 'discord-api-types/v10';
 import { setTimeout } from 'timers/promises';
 import { client } from './client';
-import { ChannelProxyPort, SendMessageData, EditMessageData } from '../../shared/ports/ChannelProxyPort';
+import { ChannelProxyPort, SendMessageData, EditMessageData, ProxyAttachment } from '../../shared/ports/ChannelProxyPort';
 import { handleWebhookError, handleDegradedModeError } from '../../shared/utils/errorHandling';
 import log, { type LogContext } from '../../shared/utils/logger';
 import { WebhookRegistry } from './WebhookRegistry';
@@ -65,25 +65,33 @@ export class DiscordChannelProxy implements ChannelProxyPort {
                     status: 'target_message_fetched'
                 });
 
-                replyStyle = buildReplyStyle(
-                    targetMessage?.author?.id || null,
-                    targetMessage?.url || null,
-                    targetMessage?.content || '',
-                    (targetMessage?.embeds?.length ?? 0) > 0,
-                    (targetMessage?.attachments?.size ?? 0) > 0
-                );
+                if (targetMessage) {
+                    replyStyle = buildReplyStyle(
+                        targetMessage.author?.id || null,
+                        targetMessage.url || null,
+                        targetMessage.content || '',
+                        (targetMessage.embeds?.length ?? 0) > 0,
+                        (targetMessage.attachments?.size ?? 0) > 0
+                    );
 
-                log.debug('Reply style built', {
-                    ...context,
-                    headerLine: replyStyle.headerLine,
-                    status: 'reply_style_built'
-                });
+                    log.debug('Reply style built', {
+                        ...context,
+                        headerLine: replyStyle.headerLine,
+                        status: 'reply_style_built'
+                    });
+                }
             }
 
             const payload = assembleWebhookPayload(content, replyStyle);
 
             // Override allowed_mentions for reply-style messages to allow user pings
             const allowedMentions = replyStyle ? replyStyle.allowedMentions : payload.allowedMentions;
+
+            // Convert ProxyAttachment[] to Discord webhook file format
+            const webhookFiles = data.attachments?.map((attachment: ProxyAttachment) => ({
+                name: attachment.name,
+                data: attachment.data
+            })) || [];
 
             // Execute webhook with message data
             const result = await this.executeWithRetry(() =>
@@ -93,7 +101,7 @@ export class DiscordChannelProxy implements ChannelProxyPort {
                         username: data.username,
                         avatar_url: data.avatarUrl,
                         allowed_mentions: allowedMentions,
-                        files: data.attachments
+                        files: webhookFiles
                     }
                 })
             ) as { id: string }; // Discord API response for webhook execute with wait=true
@@ -123,12 +131,18 @@ export class DiscordChannelProxy implements ChannelProxyPort {
         };
 
         return handleWebhookError(async () => {
+            // Convert ProxyAttachment[] to Discord webhook file format
+            const webhookFiles = data.attachments?.map((attachment: ProxyAttachment) => ({
+                name: attachment.name,
+                data: attachment.data
+            })) || [];
+
             await this.executeWithRetry(() =>
                 client.rest.patch(Routes.webhookMessage(webhookId, webhookToken, messageId), {
                     body: {
                         content: data.content.length > 2000 ? data.content.slice(0, 2000) : data.content,
                         allowed_mentions: data.allowedMentions,
-                        files: data.attachments
+                        files: webhookFiles
                     }
                 })
             );

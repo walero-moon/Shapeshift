@@ -1,12 +1,19 @@
-import { Attachment } from 'discord.js';
+// Discord-agnostic interface matching ChannelProxyPort.ProxyAttachment
+interface DiscordAttachment {
+    name: string;
+    url: string;
+    id: string;
+}
+
 import { retryAsync } from './retry';
 import { log } from './logger';
 
 /**
  * Re-uploads Discord attachments by downloading them and returning as buffers
  * for webhook use. Webhooks cannot directly use Discord attachment URLs.
+ * Returns Discord-agnostic ProxyAttachment format.
  */
-export async function reuploadAttachments(attachments: Attachment[]): Promise<Array<{ name: string; buffer: Buffer }>> {
+export async function reuploadAttachments(attachments: DiscordAttachment[]): Promise<Array<{ name: string; data: Buffer }>> {
     if (attachments.length === 0) {
         return [];
     }
@@ -31,11 +38,11 @@ export async function reuploadAttachments(attachments: Attachment[]): Promise<Ar
                 }
 
                 const arrayBuffer = await response.arrayBuffer();
-                const buffer = Buffer.from(arrayBuffer);
+                const data = Buffer.from(arrayBuffer);
 
                 return {
                     name: attachment.name || `attachment_${attachment.id}`,
-                    buffer,
+                    data,
                 };
             } catch (error) {
                 log.warn('Failed to reupload attachment for webhook', {

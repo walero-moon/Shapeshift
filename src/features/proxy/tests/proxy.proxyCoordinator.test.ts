@@ -1,18 +1,21 @@
 import { describe, it, expect, beforeEach, vi, Mocked } from 'vitest';
 import { proxyCoordinator } from '../app/ProxyCoordinator';
-import { ChannelProxyPort } from '../../../shared/ports/ChannelProxyPort';
+import { ChannelProxyPort, ProxyAttachment } from '../../../shared/ports/ChannelProxyPort';
 import { formRepo } from '../../identity/infra/FormRepo';
 import { proxiedMessageRepo } from '../infra/ProxiedMessageRepo';
 import { generateUuidv7OrUndefined } from '../../../shared/db/uuidDetection';
 import { log } from '../../../shared/utils/logger';
 import { Form } from '../../identity/infra/FormRepo';
-import { Attachment } from 'discord.js';
 
 // Mock dependencies
 vi.mock('../../../shared/utils/logger', () => ({
     log: {
         info: vi.fn(),
         error: vi.fn(),
+        debug: vi.fn(),
+        warn: vi.fn(),
+        fatal: vi.fn(),
+        child: vi.fn().mockReturnThis(),
     },
 }));
 
@@ -87,7 +90,7 @@ describe('proxyCoordinator function', () => {
             content: 'Hello world!',
             allowedMentions: { parse: [], repliedUser: false },
             avatarUrl: 'https://example.com/avatar.png',
-        });
+        }, undefined);
         expect(proxiedMessageRepo.insert).toHaveBeenCalledWith({
             id: 'uuid123',
             userId: 'user1',
@@ -124,7 +127,7 @@ describe('proxyCoordinator function', () => {
             username: 'TestForm',
             content: 'Hello world!',
             allowedMentions: { parse: [], repliedUser: false },
-        });
+        }, undefined);
         expect(mockChannelProxy.send).not.toHaveBeenCalledWith(
             expect.objectContaining({ avatarUrl: expect.anything() })
         );
@@ -132,8 +135,8 @@ describe('proxyCoordinator function', () => {
 
     it('should handle attachments', async () => {
         const attachments = [
-            { id: 'att1', url: 'https://example.com/file1.png', name: 'file1.png' },
-        ] as Attachment[];
+            { name: 'file1.png', data: Buffer.from('test attachment') },
+        ] as ProxyAttachment[];
         const mockSendResult = {
             webhookId: 'webhook123',
             webhookToken: 'token456',
@@ -157,7 +160,7 @@ describe('proxyCoordinator function', () => {
             allowedMentions: { parse: [], repliedUser: false },
             avatarUrl: 'https://example.com/avatar.png',
             attachments,
-        });
+        }, undefined);
     });
 
     it('should throw error when form not found', async () => {
@@ -212,7 +215,6 @@ describe('proxyCoordinator function', () => {
         );
 
         expect(proxiedMessageRepo.insert).toHaveBeenCalledWith({
-            id: '',
             userId: 'user1',
             formId: 'form1',
             guildId: 'guild1',

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { buildProxyMessage } from '../app/BuildProxyMessage';
 import { DEFAULT_ALLOWED_MENTIONS } from '../../../shared/utils/allowedMentions';
 import { Form } from '../../identity/infra/FormRepo';
-import { Attachment } from 'discord.js';
+import { ProxyAttachment } from '../../../shared/ports/ChannelProxyPort';
 
 describe('buildProxyMessage function', () => {
     let mockForm: Form;
@@ -78,9 +78,9 @@ describe('buildProxyMessage function', () => {
 
     it('should include attachments when provided', () => {
         const attachments = [
-            { id: 'att1', url: 'https://example.com/file1.png', name: 'file1.png' },
-            { id: 'att2', url: 'https://example.com/file2.jpg', name: 'file2.jpg' },
-        ] as Attachment[];
+            { name: 'file1.png', data: Buffer.from('test file 1') },
+            { name: 'file2.jpg', data: Buffer.from('test file 2') },
+        ] as ProxyAttachment[];
 
         const result = buildProxyMessage(mockForm, 'Hello with attachments!', attachments);
 

@@ -1,6 +1,6 @@
 import { DEFAULT_ALLOWED_MENTIONS } from '../../../shared/utils/allowedMentions';
 import { Form } from '../../identity/infra/FormRepo';
-import { Attachment } from 'discord.js';
+import { ProxyAttachment, AllowedMentions } from '../../../shared/ports/ChannelProxyPort';
 
 /**
  * Builds a webhook payload for proxying a message as a form.
@@ -11,13 +11,13 @@ import { Attachment } from 'discord.js';
 export function buildProxyMessage(
     form: Form,
     body: string,
-    attachments?: Attachment[]
+    attachments?: ProxyAttachment[] // Reuploaded attachments in standardized format
 ): {
     username: string;
     avatar_url?: string;
     content: string;
-    allowed_mentions: object;
-    attachments?: Attachment[];
+    allowed_mentions: AllowedMentions;
+    attachments?: ProxyAttachment[];
 } {
     // Sanitize and truncate content
     const sanitizedContent = body.trim();
@@ -27,8 +27,8 @@ export function buildProxyMessage(
         username: string;
         avatar_url?: string;
         content: string;
-        allowed_mentions: object;
-        attachments?: Attachment[];
+        allowed_mentions: AllowedMentions;
+        attachments?: ProxyAttachment[];
     } = {
         username: form.name,
         content,

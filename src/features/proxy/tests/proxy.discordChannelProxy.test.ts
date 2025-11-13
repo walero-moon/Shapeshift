@@ -12,7 +12,7 @@ vi.mock('discord.js', () => ({
 }));
 
 vi.mock('timers/promises', () => ({
-    setTimeout: vi.fn(),
+    setTimeout: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../../adapters/discord/client', () => ({
@@ -41,10 +41,6 @@ interface MockTextChannel {
     isTextBased: ReturnType<typeof vi.fn>;
 }
 
-interface MockWebhook {
-    id: string;
-    token: string;
-}
 
 interface WebhookBody {
     content: string;
@@ -57,11 +53,12 @@ interface WebhookBody {
 
 describe('DiscordChannelProxy', () => {
     let proxy: DiscordChannelProxy;
+
     let mockChannel: MockTextChannel;
-    let mockWebhook: MockWebhook;
 
     beforeEach(() => {
         vi.clearAllMocks();
+
         // Mock the webhook registry
         const mockWebhookRegistry = {
             getWebhook: vi.fn().mockResolvedValue({ id: 'webhook456', token: 'token789' })
@@ -77,13 +74,7 @@ describe('DiscordChannelProxy', () => {
             isTextBased: vi.fn().mockReturnValue(true),
         };
 
-        mockWebhook = {
-            id: 'webhook456',
-            token: 'token789',
-        };
-
         vi.mocked(client.channels.fetch).mockResolvedValue(mockChannel as unknown as any);
-        vi.mocked(mockChannel.createWebhook).mockResolvedValue(mockWebhook);
         vi.mocked(client.rest.get).mockResolvedValue([]);
         vi.mocked(client.rest.post).mockResolvedValue({ id: 'webhook456', token: 'token789' });
     });
@@ -108,16 +99,14 @@ describe('DiscordChannelProxy', () => {
             });
 
             expect(client.channels.fetch).toHaveBeenCalledWith('channel123');
-            expect(mockChannel.createWebhook).toHaveBeenCalledWith({
-                name: 'Shapeshift Proxy',
-                reason: 'Temporary webhook for message proxying',
-            });
             expect(client.rest.post).toHaveBeenCalledWith('/webhooks/webhook456/token789?wait=true', {
                 body: {
                     content: 'Hello world',
+                    components: [],
+                    allowedMentions: { parse: [] },
                     username: 'TestUser',
                     avatar_url: 'https://example.com/avatar.png',
-                    allowed_mentions: { parse: [], repliedUser: false },
+                    allowed_mentions: { parse: [] },
                     files: [],
                 },
             });
@@ -125,9 +114,8 @@ describe('DiscordChannelProxy', () => {
 
         it('should truncate content to 2000 characters', async () => {
             const longContent = 'a'.repeat(2500);
-            const mockWebhookResponse = { id: 'webhook456', token: 'token789' };
             const mockMessageResponse = { id: 'msg123' };
-            vi.mocked(client.rest.post).mockResolvedValueOnce(mockWebhookResponse).mockResolvedValueOnce(mockMessageResponse);
+            vi.mocked(client.rest.post).mockResolvedValue(mockMessageResponse);
 
             await proxy.send({
                 username: 'TestUser',
@@ -149,12 +137,14 @@ describe('DiscordChannelProxy', () => {
         });
 
         it('should handle 429 rate limit by retrying', async () => {
-            const mockError = { code: 429, retry_after: 1000 };
+            const mockError = new Error('test');
+            (mockError as any).code = 429;
+            (mockError as any).retry_after = 1000;
             const mockMessageResponse = { id: 'msg123' };
 
             vi.mocked(client.rest.post)
-                .mockRejectedValueOnce(mockError)
-                .mockResolvedValueOnce(mockMessageResponse);
+                .mockImplementationOnce(() => Promise.reject(mockError))
+                .mockImplementationOnce(() => Promise.resolve(mockMessageResponse));
 
             await proxy.send({
                 username: 'TestUser',
@@ -168,9 +158,11 @@ describe('DiscordChannelProxy', () => {
         });
 
         it('should throw after max retries on 429', async () => {
-            const mockError = { code: 429, retry_after: 1000 };
+            const mockError = new Error('test');
+            (mockError as any).code = 429;
+            (mockError as any).retry_after = 1000;
 
-            vi.mocked(client.rest.post).mockRejectedValue(mockError);
+            vi.mocked(client.rest.post).mockImplementation(() => Promise.reject(mockError));
 
             await expect(proxy.send({
                 username: 'TestUser',
@@ -223,12 +215,14 @@ describe('DiscordChannelProxy', () => {
         });
 
         it('should handle fetch failure gracefully for reply-style', async () => {
-            const mockWebhookResponse = { id: 'webhook456', token: 'token789' };
             const mockMessageResponse = { id: 'msg123' };
-            vi.mocked(client.rest.post).mockResolvedValueOnce(mockWebhookResponse).mockResolvedValueOnce(mockMessageResponse);
+            vi.mocked(client.rest.post).mockResolvedValue(mockMessageResponse);
 
-            // Mock channel fetch to fail
-            vi.mocked(client.channels.fetch).mockRejectedValue(new Error('Channel fetch failed'));
+            // Mock channel fetch to fail for reply channel but succeed for proxy channel
+            vi.mocked(client.channels.fetch).mockImplementation((id: string) => {
+                if (id === 'channel123') return Promise.resolve(mockChannel as any);
+                else return Promise.reject(new Error('Channel fetch failed'));
+            });
 
             const result = await proxy.send({
                 username: 'TestUser',
@@ -245,7 +239,7 @@ describe('DiscordChannelProxy', () => {
             });
 
             // Verify webhook payload doesn't include reply-style components
-            const webhookCall = vi.mocked(client.rest.post).mock.calls[1];
+            const webhookCall = vi.mocked(client.rest.post).mock.calls[0];
             expect(webhookCall).toBeDefined();
             if (webhookCall) {
                 const payload = webhookCall[1]?.body as any;

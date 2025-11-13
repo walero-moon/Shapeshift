@@ -209,7 +209,7 @@ describe('delete form cascade contract', () => {
         vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
 
         // Mock deleteForm to implement the new cascade behavior
-        vi.mocked(deleteForm).mockImplementation(async (formId: string, userId: string) => {
+        vi.mocked(deleteForm).mockImplementation(async (formId: string, _userId: string) => {
             const form = await formRepo.getById(formId);
             if (!form) throw new Error('Form not found');
             await formRepo.delete(formId);

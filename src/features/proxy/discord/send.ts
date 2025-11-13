@@ -5,6 +5,7 @@ import { validateUserChannelPerms } from '../app/ValidateUserChannelPerms';
 import { DiscordChannelProxy } from '../../../adapters/discord/DiscordChannelProxy';
 import { handleInteractionError } from '../../../shared/utils/errorHandling';
 import { DEFAULT_ALLOWED_MENTIONS } from '../../../shared/utils/allowedMentions';
+import { reuploadAttachments } from '../../../shared/utils/attachments';
 
 export const command = {
     data: new SlashCommandBuilder()
@@ -127,20 +128,20 @@ export const command = {
                 });
             }
 
-            // Collect attachments
-            const attachments = [];
+            // Collect attachments in Discord.js format
+            const discordAttachments = [];
             for (let i = 1; i <= 10; i++) {
                 const attachment = interaction.options.getAttachment(`attachment${i}`);
                 if (attachment) {
-                    attachments.push(attachment);
+                    discordAttachments.push(attachment);
                 }
             }
 
-            // Re-validate permissions with attachments
+            // Re-validate permissions with Discord attachments
             const hasPermsWithAttachments = await validateUserChannelPerms(
                 interaction.user.id,
                 interaction.channel as any, // Cast to TextChannel
-                attachments
+                discordAttachments
             );
             if (!hasPermsWithAttachments) {
                 return interaction.editReply({
@@ -149,10 +150,19 @@ export const command = {
                 });
             }
 
+            // Reupload Discord attachments to standardized format
+            const standardizedAttachments = await reuploadAttachments(
+                discordAttachments.map(attachment => ({
+                    name: attachment.name,
+                    url: attachment.url,
+                    id: attachment.id
+                }))
+            );
+
             // Create channel proxy
             const channelProxy = new DiscordChannelProxy(interaction.channel!.id);
 
-            // Proxy the message
+            // Proxy the message with standardized attachments
             const result = await proxyCoordinator(
                 interaction.user.id,
                 formId,
@@ -160,7 +170,7 @@ export const command = {
                 interaction.guild!.id,
                 text,
                 channelProxy,
-                attachments
+                standardizedAttachments
             );
 
             // Confirm with link to the message
