@@ -113,7 +113,7 @@ export async function handleModalSubmit(interaction: ModalSubmitInteraction): Pr
             return;
         }
 
-        const updatedForm = await editForm(formId, {
+        const updatedForm = await editForm(formId, interaction.user.id, {
             name: newName,
             avatarUrl: newAvatarUrl
         });
@@ -139,6 +139,15 @@ export async function handleModalSubmit(interaction: ModalSubmitInteraction): Pr
             allowedMentions: DEFAULT_ALLOWED_MENTIONS
         });
     } catch (error) {
+        // Handle ownership violations directly with specific error message
+        if (error instanceof Error && error.message === 'Form does not belong to user') {
+            await interaction.editReply({
+                content: 'Form does not belong to user',
+                allowedMentions: DEFAULT_ALLOWED_MENTIONS
+            });
+            return;
+        }
+
         await handleInteractionError(interaction, error, {
             component: 'identity',
             userId: interaction.user.id,

@@ -185,7 +185,7 @@ describe('Edge Cases and Input Validation', () => {
         it('should handle form editing during DB unavailability', async () => {
             vi.mocked(formRepo.updateNameAvatar).mockRejectedValue(new Error('Database unavailable'));
 
-            await expect(editForm('form1', { name: 'New Name' })).rejects.toThrow('Database unavailable');
+            await expect(editForm('form1', 'user1', { name: 'New Name' })).rejects.toThrow('Database unavailable');
         });
 
         it('should handle alias creation during DB unavailability', async () => {

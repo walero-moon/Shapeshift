@@ -17,10 +17,11 @@ export interface EditFormResult {
  * Edit an existing form
  *
  * @param formId The ID of the form to edit
+ * @param userId The ID of the user performing the edit
  * @param input The fields to update
  * @returns The updated form
  */
-export async function editForm(formId: string, input: EditFormInput): Promise<EditFormResult> {
+export async function editForm(formId: string, userId: string, input: EditFormInput): Promise<EditFormResult> {
     try {
         // Validate that at least one field is being updated
         if (input.name === undefined && input.avatarUrl === undefined) {
@@ -32,18 +33,29 @@ export async function editForm(formId: string, input: EditFormInput): Promise<Ed
             throw new Error('Form name cannot be empty');
         }
 
-        const form = await formRepo.updateNameAvatar(formId, input);
+        // Fetch form and verify ownership
+        const form = await formRepo.getById(formId);
+        if (!form) {
+            throw new Error('Form not found');
+        }
+
+        if (form.userId !== userId) {
+            throw new Error('Form does not belong to user');
+        }
+
+        const updatedForm = await formRepo.updateNameAvatar(formId, input);
 
         return {
-            id: form.id,
-            name: form.name,
-            avatarUrl: form.avatarUrl || null,
-            createdAt: form.createdAt,
+            id: updatedForm.id,
+            name: updatedForm.name,
+            avatarUrl: updatedForm.avatarUrl || null,
+            createdAt: updatedForm.createdAt,
         };
     } catch (error) {
         log.error('Failed to edit form', {
             component: 'identity',
             formId,
+            userId,
             error: error instanceof Error ? error.message : String(error),
             status: 'database_error'
         });

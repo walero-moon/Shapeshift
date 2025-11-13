@@ -18,13 +18,22 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const formId = interaction.options.getString('form', true);
 
     try {
-        await deleteForm(formId);
+        await deleteForm(formId, interaction.user.id);
 
         return await interaction.editReply({
             content: '✅ Form deleted successfully.',
             allowedMentions: DEFAULT_ALLOWED_MENTIONS
         });
     } catch (error) {
+        // Handle ownership violations directly with specific error message
+        if (error instanceof Error && error.message === 'Form does not belong to user') {
+            await interaction.editReply({
+                content: 'Form does not belong to user',
+                allowedMentions: DEFAULT_ALLOWED_MENTIONS
+            });
+            return undefined;
+        }
+        
         await handleInteractionError(interaction, error, {
             component: 'identity',
             userId: interaction.user.id,

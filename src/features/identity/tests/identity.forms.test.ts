@@ -269,13 +269,14 @@ describe('editForm function', () => {
             createdAt: new Date(),
         };
 
+        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
         vi.mocked(formRepo.updateNameAvatar).mockResolvedValue(mockForm);
 
         const input: EditFormInput = {
             name: 'New Name',
             avatarUrl: 'https://example.com/new.png',
         };
-        const result = await editForm('form1', input);
+        const result = await editForm('form1', 'user1', input);
 
         expect(result).toEqual({
             id: mockForm.id,
@@ -290,10 +291,32 @@ describe('editForm function', () => {
         });
     });
 
+    it('should reject edit of form belonging to another user', async () => {
+        const mockForm = {
+            id: 'form1',
+            userId: 'user1',
+            name: 'Original Name',
+            avatarUrl: 'https://example.com/original.png',
+            createdAt: new Date(),
+        };
+
+        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
+
+        const input: EditFormInput = {
+            name: 'New Name',
+        };
+
+        await expect(editForm('form1', 'user2', input)).rejects.toThrow(
+            'Form does not belong to user'
+        );
+
+        expect(formRepo.updateNameAvatar).not.toHaveBeenCalled();
+    });
+
     it('should require at least one field for update', async () => {
         const input: EditFormInput = {};
 
-        await expect(editForm('form1', input)).rejects.toThrow(
+        await expect(editForm('form1', 'user1', input)).rejects.toThrow(
             'At least one field must be provided for update'
         );
     });
@@ -303,19 +326,28 @@ describe('editForm function', () => {
             name: '',
         };
 
-        await expect(editForm('form1', input)).rejects.toThrow(
+        await expect(editForm('form1', 'user1', input)).rejects.toThrow(
             'Form name cannot be empty'
         );
     });
 
     it('should handle database errors during update', async () => {
+        const mockForm = {
+            id: 'form1',
+            userId: 'user1',
+            name: 'Original Name',
+            avatarUrl: null,
+            createdAt: new Date(),
+        };
+
+        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
         vi.mocked(formRepo.updateNameAvatar).mockRejectedValue(new Error('Database constraint violation'));
 
         const input: EditFormInput = {
             name: 'New Name',
         };
 
-        await expect(editForm('form1', input)).rejects.toThrow('Database constraint violation');
+        await expect(editForm('form1', 'user1', input)).rejects.toThrow('Database constraint violation');
     });
 
     it('should handle partial updates (only name)', async () => {
@@ -327,12 +359,13 @@ describe('editForm function', () => {
             createdAt: new Date(),
         };
 
+        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
         vi.mocked(formRepo.updateNameAvatar).mockResolvedValue(mockForm);
 
         const input: EditFormInput = {
             name: 'New Name',
         };
-        await editForm('form1', input);
+        await editForm('form1', 'user1', input);
 
         expect(formRepo.updateNameAvatar).toHaveBeenCalledWith('form1', {
             name: 'New Name',
@@ -348,12 +381,13 @@ describe('editForm function', () => {
             createdAt: new Date(),
         };
 
+        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
         vi.mocked(formRepo.updateNameAvatar).mockResolvedValue(mockForm);
 
         const input: EditFormInput = {
             avatarUrl: 'https://example.com/new.png',
         };
-        await editForm('form1', input);
+        await editForm('form1', 'user1', input);
 
         expect(formRepo.updateNameAvatar).toHaveBeenCalledWith('form1', {
             avatarUrl: 'https://example.com/new.png',
@@ -378,7 +412,7 @@ describe('deleteForm function', () => {
 
         vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
 
-        await deleteForm('form1');
+        await deleteForm('form1', 'user1');
 
         // Should only delete the form; aliases are removed via ON DELETE CASCADE
         expect(formRepo.delete).toHaveBeenCalledWith('form1');
@@ -388,10 +422,28 @@ describe('deleteForm function', () => {
         expect(aliasRepo.delete).not.toHaveBeenCalled();
     });
 
+    it('should reject deletion of form belonging to another user', async () => {
+        const mockForm = {
+            id: 'form1',
+            userId: 'user1',
+            name: 'Test Form',
+            avatarUrl: null,
+            createdAt: new Date(),
+        };
+
+        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
+
+        await expect(deleteForm('form1', 'user2')).rejects.toThrow(
+            'Form does not belong to user'
+        );
+
+        expect(formRepo.delete).not.toHaveBeenCalled();
+    });
+
     it('should handle form not found', async () => {
         vi.mocked(formRepo.getById).mockResolvedValue(null);
 
-        await expect(deleteForm('form1')).rejects.toThrow(
+        await expect(deleteForm('form1', 'user1')).rejects.toThrow(
             'Form not found'
         );
     });
@@ -408,7 +460,7 @@ describe('deleteForm function', () => {
         vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
         vi.mocked(formRepo.delete).mockRejectedValue(new Error('Foreign key constraint'));
 
-        await expect(deleteForm('form1')).rejects.toThrow('Foreign key constraint');
+        await expect(deleteForm('form1', 'user1')).rejects.toThrow('Foreign key constraint');
     });
 });
 

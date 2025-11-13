@@ -152,7 +152,7 @@ describe('form edit modal submit', () => {
 
         await handleModalSubmit(mockInteraction as unknown as ModalSubmitInteraction);
 
-        expect(editForm).toHaveBeenCalledWith('form1', {
+        expect(editForm).toHaveBeenCalledWith('form1', 'user1', {
             name: 'Updated Name',
             avatarUrl: 'https://example.com/avatar.png',
         });
@@ -209,14 +209,14 @@ describe('delete form cascade contract', () => {
         vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
 
         // Mock deleteForm to implement the new cascade behavior
-        vi.mocked(deleteForm).mockImplementation(async (formId: string) => {
+        vi.mocked(deleteForm).mockImplementation(async (formId: string, userId: string) => {
             const form = await formRepo.getById(formId);
             if (!form) throw new Error('Form not found');
             await formRepo.delete(formId);
         });
 
         // Delete form (deleteForm now only deletes the form, relying on cascade)
-        await deleteForm('form1');
+        await deleteForm('form1', 'user1');
 
         // Verify only form is deleted; aliases are removed via ON DELETE CASCADE
         expect(formRepo.delete).toHaveBeenCalledWith('form1');
@@ -559,6 +559,30 @@ describe('form edit error handling', () => {
         await expect(() => import('../discord/form.edit').then(m => m.execute(mockInteraction as unknown as ChatInputCommandInteraction))).rejects.toThrow();
         // The execute function throws, but in real Discord it would be caught by the framework
     });
+
+    it('should handle unauthorized form edit attempt', async () => {
+        vi.mocked(listForms).mockResolvedValue([{ id: 'form1', name: 'Form 1', avatarUrl: null, createdAt: new Date(), aliases: [] }]);
+        vi.mocked(editForm).mockRejectedValue(new Error('Form does not belong to user'));
+
+        const mockInteraction = {
+            customId: 'edit_form:form1',
+            user: { id: 'user1' },
+            fields: {
+                getTextInputValue: vi.fn().mockReturnValueOnce('New Name').mockReturnValueOnce(''),
+            },
+            deferred: false,
+            deferUpdate: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
+            editReply: vi.fn(),
+        };
+
+        await handleModalSubmit(mockInteraction as unknown as ModalSubmitInteraction);
+
+        expect(mockInteraction.deferUpdate).toHaveBeenCalled();
+        expect(mockInteraction.editReply).toHaveBeenCalledWith({
+            content: 'Form does not belong to user',
+            allowedMentions: { parse: [], repliedUser: false }
+        });
+    });
 });
 
 describe('form delete error handling', () => {
@@ -584,6 +608,28 @@ describe('form delete error handling', () => {
         expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
             content: 'An unexpected error occurred. Please try again later.',
+            allowedMentions: { parse: [], repliedUser: false }
+        });
+    });
+
+    it('should handle unauthorized form delete attempt', async () => {
+        vi.mocked(deleteForm).mockRejectedValue(new Error('Form does not belong to user'));
+
+        const mockInteraction = {
+            deferred: false,
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
+            editReply: vi.fn(),
+            options: {
+                getString: vi.fn().mockReturnValue('form1'),
+            },
+            user: { id: 'user1' },
+        };
+
+        await import('../discord/form.delete').then(m => m.execute(mockInteraction as unknown as ChatInputCommandInteraction));
+
+        expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
+        expect(mockInteraction.editReply).toHaveBeenCalledWith({
+            content: 'Form does not belong to user',
             allowedMentions: { parse: [], repliedUser: false }
         });
     });
