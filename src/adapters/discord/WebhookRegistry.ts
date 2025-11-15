@@ -23,25 +23,69 @@ export class WebhookRegistry {
         };
 
         try {
+            log.info('Attempting to get existing webhooks for channel', {
+                ...context,
+                status: 'webhook_lookup_start'
+            });
+
             // GET /channels/{id}/webhooks
             const webhooks = await client.rest.get(Routes.channelWebhooks(channelId)) as APIWebhook[];
 
             const appId = client.application!.id;
-            const name = 'Shapeshift Proxy';
+            // Create unique webhook name per bot instance using last 4 chars of app ID
+            const baseName = 'Shapeshift Proxy';
+            const uniqueName = `${baseName} ${appId.slice(-4)}`;
 
-            let webhook = webhooks.find(w => w.application_id === appId || w.name === name);
+            log.info('Retrieved webhooks, searching for bot-specific webhook', {
+                ...context,
+                webhookCount: webhooks.length,
+                appId,
+                uniqueName,
+                status: 'webhook_lookup_complete'
+            });
+
+            // Look for webhook created by this specific bot instance
+            let webhook = webhooks.find(w => w.application_id === appId && w.name === uniqueName);
 
             if (!webhook) {
+                log.info('No bot-specific webhook found, creating new one', {
+                    ...context,
+                    uniqueName,
+                    status: 'webhook_creation_start'
+                });
+
                 // POST /channels/{id}/webhooks
                 webhook = await client.rest.post(Routes.channelWebhooks(channelId), {
                     body: {
-                        name,
+                        name: uniqueName,
                         reason: 'Persistent webhook for Shapeshift proxying'
                     }
                 }) as APIWebhook;
+
+                log.info('Bot-specific webhook created successfully', {
+                    ...context,
+                    webhookId: webhook?.id,
+                    webhookName: webhook?.name,
+                    hasToken: !!webhook?.token,
+                    status: 'webhook_creation_complete'
+                });
+            } else {
+                log.info('Found existing bot-specific webhook', {
+                    ...context,
+                    webhookId: webhook.id,
+                    webhookName: webhook.name,
+                    hasToken: !!webhook.token,
+                    status: 'webhook_found'
+                });
             }
 
             if (!webhook || !webhook.token) {
+                log.error('Webhook creation failed or missing token', {
+                    ...context,
+                    webhookExists: !!webhook,
+                    hasToken: webhook ? !!webhook.token : false,
+                    status: 'webhook_invalid'
+                });
                 throw new Error('Failed to create or retrieve webhook with token');
             }
 

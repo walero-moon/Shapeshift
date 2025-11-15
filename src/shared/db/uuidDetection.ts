@@ -38,11 +38,11 @@ async function checkUuidv7Function(): Promise<boolean> {
         const result = await db.execute(sql`SELECT uuidv7()`);
         return (result as unknown as { rows: unknown[] }).rows.length > 0;
     } catch (error) {
-        // If the function doesn't exist, it will throw an error
-        log.error('Failed to check UUIDv7 function availability', {
+        // If the function doesn't exist, it will throw an error - this is expected
+        log.info('UUIDv7 function not available in database, will use application fallback', {
             component: 'uuid-detection',
             error: error instanceof Error ? error.message : String(error),
-            status: 'error'
+            status: 'fallback'
         });
         return false;
     }

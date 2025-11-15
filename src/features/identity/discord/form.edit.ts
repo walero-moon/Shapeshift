@@ -5,8 +5,7 @@ import {
     TextInputBuilder,
     TextInputStyle,
     ActionRowBuilder,
-    ModalSubmitInteraction,
-    MessageFlags
+    ModalSubmitInteraction
 } from 'discord.js';
 import { editForm } from '../app/EditForm';
 import { listForms } from '../app/ListForms';
@@ -23,8 +22,6 @@ export const data = new SlashCommandSubcommandBuilder()
             .setAutocomplete(true));
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
     const formId = interaction.options.getString('form', true);
 
     // Get the form to prefill the modal
@@ -69,48 +66,36 @@ export async function handleModalSubmit(interaction: ModalSubmitInteraction): Pr
     const [action, formId] = interaction.customId.split(':');
     if (action !== 'edit_form' || !formId) return;
 
-    await interaction.deferUpdate();
-
-    const newName = interaction.fields.getTextInputValue('name').trim();
-    const newAvatarUrl = interaction.fields.getTextInputValue('avatar_url').trim() || null;
-
-    // Validate name
-    if (!newName) {
-        await interaction.editReply({
-            content: 'Form name cannot be empty. Please provide a name for your form.',
-            allowedMentions: DEFAULT_ALLOWED_MENTIONS
-        });
-        return;
-    }
-
-    // Validate avatar URL if provided
-    if (newAvatarUrl) {
-        const validation = validateUrl(newAvatarUrl, {
-            component: 'identity',
-            userId: interaction.user.id,
-            guildId: interaction.guild?.id,
-            channelId: interaction.channel?.id,
-            interactionId: interaction.id
-        });
-        if (!validation.isValid) {
-            await interaction.editReply({
-                content: validation.errorMessage || 'Invalid avatar URL.',
-                allowedMentions: DEFAULT_ALLOWED_MENTIONS
-            });
-            return;
-        }
-    }
+    await interaction.deferReply();
 
     try {
+        const newName = interaction.fields.getTextInputValue('name').trim();
+        const newAvatarUrl = interaction.fields.getTextInputValue('avatar_url').trim() || null;
+
+        // Validate name
+        if (!newName) {
+            throw new Error('Form name cannot be empty. Please provide a name for your form.');
+        }
+
+        // Validate avatar URL if provided
+        if (newAvatarUrl) {
+            const validation = validateUrl(newAvatarUrl, {
+                component: 'identity',
+                userId: interaction.user.id,
+                guildId: interaction.guild?.id,
+                channelId: interaction.channel?.id,
+                interactionId: interaction.id
+            });
+            if (!validation.isValid) {
+                throw new Error(validation.errorMessage || 'Invalid avatar URL.');
+            }
+        }
+
         // Get old form for comparison
         const forms = await listForms(interaction.user.id);
         const oldForm = forms.find(f => f.id === formId);
         if (!oldForm) {
-            await interaction.editReply({
-                content: 'Form not found.',
-                allowedMentions: DEFAULT_ALLOWED_MENTIONS
-            });
-            return;
+            throw new Error('Form not found.');
         }
 
         const updatedForm = await editForm(formId, interaction.user.id, {
@@ -139,21 +124,12 @@ export async function handleModalSubmit(interaction: ModalSubmitInteraction): Pr
             allowedMentions: DEFAULT_ALLOWED_MENTIONS
         });
     } catch (error) {
-        // Handle ownership violations directly with specific error message
-        if (error instanceof Error && error.message === 'Form does not belong to user') {
-            await interaction.editReply({
-                content: 'Form does not belong to user',
-                allowedMentions: DEFAULT_ALLOWED_MENTIONS
-            });
-            return;
-        }
-
         await handleInteractionError(interaction, error, {
             component: 'identity',
             userId: interaction.user.id,
             guildId: interaction.guild?.id,
             channelId: interaction.channel?.id,
             interactionId: interaction.id
-        });
+        }, error instanceof Error ? error.message : 'An error occurred during form editing.');
     }
 }
