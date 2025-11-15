@@ -6,14 +6,14 @@ export function assembleWebhookPayload(
     content: string,
     replyStyle: {
         headerLine: string;
-        quoteLine?: string;
+        allowedMentions: object;
     } | null
 ) {
     const assembledContent = replyStyle
         ? `${replyStyle.headerLine}\n${content}`
         : content;
     const components: any[] = [];
-    const allowedMentions = { parse: [] };
+    const allowedMentions = replyStyle ? replyStyle.allowedMentions : { parse: [] };
 
     return {
         content: assembledContent,
