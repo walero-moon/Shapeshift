@@ -1,298 +1,75 @@
-# Shapeshift Discord Bot Deficiency Report
+# Shapeshift Discord Bot – Current Deficiency Report
 
 ## Executive Summary
+The codebase has made progress toward the architecture described in `AGENTS.md`, but multiple regressions block a production-ready release. Critical gaps include broken interaction flows (the `/form edit` modal cannot open), alias automation bugs that prevent default triggers from being created, improper webhook payload assembly that drops attachments, and extensive reliance on `console.*` logging despite the mandated Pino logger. In addition, the proxy surface lacks the promised context menus and edit/delete flows, and several repositories re-query entire tables on every call, leading to O(n) work per message. This document catalogs the most pressing issues, their impact, and why they deviate from the desired architecture.
 
-This comprehensive analysis of the Shapeshift Discord bot codebase reveals a project in early development stages with significant architectural alignment to the AGENTS.md specifications. The codebase demonstrates solid adherence to the vertical slices and ports & adapters patterns, with proper separation of concerns between Discord interactions, business logic, and data persistence. However, several critical deficiencies exist in logging, error handling, security, and completeness that must be addressed before production deployment.
+---
 
-## Application Flow Diagram
+## 1. Observability & Error Handling Gaps
+1. **Console logging still dominates** — The ready event prints ASCII art via `console.log` rather than structured Pino logs, and the message proxy listener spams `console.log`/`console.error` throughout its control flow. This violates the "Pino everywhere" requirement and floods stdout with noisy debug output instead of structured context-rich events.【F:src/index.ts†L18-L35】【F:src/adapters/discord/listeners/messageCreate.proxy.ts†L15-L190】
+2. **Autocomplete handlers ignore error utilities** — `/send` and `/alias` autocomplete handlers fall back to `console.error` and return empty arrays. They never use `handleInteractionError` nor log via `log.*`, so failures become silent and untraceable in production logs.【F:src/features/proxy/discord/send.autocomplete.ts†L4-L35】【F:src/features/identity/discord/alias.autocomplete.ts†L1-L35】
+3. **Graceful degradation hides real faults** — `listAliases` catches *any* error (including "form not found") and returns an empty payload with a blank form name, so `/alias list` will render "Aliases for  ()" instead of surfacing ownership violations. This directly contradicts the UX guidance that validation errors should surface clear user feedback.【F:src/features/identity/app/ListAliases.ts†L27-L74】
 
-```mermaid
-graph TD
-    A[Bot Startup] --> B[Load Environment Config]
-    B --> C[Initialize Discord Client]
-    C --> D[Register Commands in Registry]
-    D --> E[Deploy Commands to Guild/Global]
-    E --> F[Client Ready Event]
-    F --> G[Interaction Handler]
+**Impact:** Production log streams cannot be correlated across services, and user-facing bugs (bad form IDs, DB outages) silently downgrade to "no data" states, preventing moderators from diagnosing issues.
 
-    G --> H{Interaction Type}
-    H -->|Chat Input Command| I[Get Command from Registry]
-    H -->|Autocomplete| J[Get Autocomplete Handler]
-    H -->|Button| K[Get Button Handler]
-    H -->|Modal Submit| L[Get Modal Handler]
+---
 
-    I --> M{Command Found?}
-    M -->|Yes| N[Execute Command]
-    M -->|No| O[Log Warning]
+## 2. Interaction Flow Breakages
+1. **`/form edit` double-acks the interaction** — The command immediately calls `interaction.deferReply()` and *then* `interaction.showModal()`. Discord forbids acknowledging an interaction twice, so the modal throws `InteractionAlreadyReplied` and never appears. The paired modal submit handler then calls `interaction.deferUpdate()` (which expects a component interaction) before attempting `editReply`, so even if the modal opened the acknowledgement path would still be invalid.【F:src/features/identity/discord/form.edit.ts†L25-L140】
+2. **`handleInteractionError` never runs for modal failures** — Because `handleModalSubmit` throws before any `try/catch`, ownership or validation errors bubble all the way up to the global interaction handler, which responds with the generic "There was an error" message instead of the specific validation copy mandated in `AGENTS.md`. The UX for editing forms is therefore completely broken.
 
-    J --> P[Execute Autocomplete]
-    K --> Q[Execute Button Handler]
-    L --> R[Execute Modal Handler]
+**Impact:** Users cannot edit forms at all, and reviewers cannot verify the modal UX described in the roadmap.
 
-    N --> S{Execution Success?}
-    S -->|Yes| T[Log Success]
-    S -->|No| U[Handle Error]
+---
 
-    U --> V{Interaction Repliable?}
-    V -->|Yes| W[Reply with Error Message]
-    V -->|No| X[Follow Up with Error Message]
+## 3. Identity Use-case Bugs
+1. **Default short aliases never get created** — `createForm` only attempts the `<first-letter>:text` alias when `firstLetter !== name.charAt(0)`, but those two expressions are always equal. Every form therefore misses its short alias, contradicting the auto-default policy described in `AGENTS.md`. Collision detection for short aliases is never exercised.【F:src/features/identity/app/CreateForm.ts†L55-L113】
+2. **Case-sensitive import typo** — `CreateForm`, `AddAlias`, and multiple tests import `./NormalizeAlias`, but the file on disk is `normalizeAlias.ts`. This works on macOS but fails on Linux/CI, preventing the project from compiling in the target Docker images.【F:src/features/identity/app/CreateForm.ts†L1-L4】【F:src/features/identity/app/AddAlias.ts†L1-L4】
+3. **Alias removal scans entire tables** — `removeAlias` fetches every alias for a user (`aliasRepo.getByUser`) on each deletion just to find one ID. This is O(n) per call, wastes memory, and risks race conditions if the alias disappears between the scan and the delete. A `getById` repository method is required for vertical-slice isolation.【F:src/features/identity/app/RemoveAlias.ts†L10-L23】
 
-    P --> Y[Respond with Filtered Options]
-    Q --> Z[Update Interaction]
-    R --> AA[Reply or Follow Up]
+**Impact:** Users do not receive the expected default triggers, CLI builds fail on Linux, and alias management does not scale.
 
-    F --> BB[Error Handlers]
-    BB --> CC[Discord Client Error]
-    BB --> DD[Discord Client Warning]
-    BB --> EE[Unhandled Rejection]
-    BB --> FF[Uncaught Exception]
+---
 
-    CC --> GG[Log Error]
-    DD --> HH[Log Warning]
-    EE --> II[Log Rejection]
-    FF --> JJ[Log Exception & Exit]
+## 4. Proxy & Webhook Pipeline Defects
+1. **Webhook attachments are dropped** — `DiscordChannelProxy.send` passes `files` inside the JSON `body` when calling `client.rest.post`. The REST client expects `files` at the top level (outside the JSON body), so attachments are silently ignored. Reply-style messages therefore lose images and reuploaded files, contradicting the "Proxy attachments" requirement.【F:src/adapters/discord/DiscordChannelProxy.ts†L90-L107】
+2. **Channel validation relies on brittle `type === 1` checks** — The `/send` command treats `interaction.channel.type === 1` as the DM guard and casts `interaction.channel as any` twice when checking permissions. This makes the handler dependent on Discord.js internal enums instead of the provided `ChannelType.DM`, and bypasses TypeScript entirely, which is the opposite of the "ports & adapters" discipline.【F:src/features/proxy/discord/send.ts†L111-L147】
+3. **Tag proxying does O(n) alias scans per message** — `matchAlias` fetches all aliases for the user on every message and iterates them in JavaScript to find matches. Combined with `listForms` performing per-form alias queries, a single message can trigger dozens of sequential DB hits. No caching or prefix tree exists, so proxy throughput degrades as users add aliases.【F:src/features/proxy/app/MatchAlias.ts†L21-L101】【F:src/features/identity/app/ListForms.ts†L21-L44】
+4. **Listener still contains debug console noise** — Even after adopting the logging wrapper, the tag listener still prints every branch via `console.log`. This both spams stdout and exposes potentially sensitive message content in plain text, violating the "Allowed Mentions" safety goal.【F:src/adapters/discord/listeners/messageCreate.proxy.ts†L15-L190】
 
-    A --> KK[Graceful Shutdown]
-    KK --> LL[Receive SIGINT/SIGTERM]
-    LL --> MM[Log Shutdown]
-    MM --> NN[Destroy Client]
-    NN --> OO[Exit Process]
-```
+**Impact:** Proxy messages cannot carry attachments reliably, DM guards are brittle, and DB load scales linearly with alias count, threatening rate limits.
 
-## Identified Deficiencies
+---
 
-### 1. Code Quality Issues
+## 5. Architectural Drift & Duplication
+1. **Shared logic is copy/pasted** — The `/form`, `/alias`, and `/send` autocomplete handlers are identical slices of code that filter `listForms`. Instead of exposing a Discord-agnostic "list user forms for autocomplete" use-case in the `app/` layer, every handler reimplements the same logic (and the same error handling bug).【F:src/features/identity/discord/form.autocomplete.ts†L1-L18】【F:src/features/identity/discord/alias.autocomplete.ts†L1-L35】【F:src/features/proxy/discord/send.autocomplete.ts†L4-L35】
+2. **Feature surface is incomplete relative to the roadmap** — The proxy slice exports only `/send` plus the tag listener; `registry.ts` registers no message context menus (Proxy As…, Edit proxied…, Delete proxied…, Who sent this?). Likewise, there are no edit/delete use-cases consuming the stored webhook IDs in `proxied_messages`. This diverges from steps 5–6 in `AGENTS.md` and from the README feature list.【F:src/adapters/discord/registry.ts†L79-L101】【F:src/features/proxy/discord/send.ts†L1-L194】
+3. **Docker "migrate" service launches the bot** — `docker-compose.yml` defines a `migrate` profile that runs `pnpm db:generate && pnpm db:migrate && node dist/index.js`. That service is supposed to run migrations only, yet it also boots the bot inside the same container. Because the production image only copies `dist/` plus `schema.ts`, `drizzle-kit generate` cannot see the rest of `src/`, so this service both fails and muddles responsibilities.【F:docker-compose.yml†L24-L36】
+4. **Unit tests are placeholders** — The top-level `tests/simple.test.js` only asserts `true === true`, providing no coverage for the real features, even though there is a `tests` folder in the repo. This contradicts the Quality Gate section that demands meaningful tests before declaring a PR done.【F:tests/simple.test.js†L1-L6】
 
-#### Inadequate Logging Implementation
-- **Severity:** High
-- **Impact:** Debugging, monitoring, and operational visibility severely compromised
-- **Files Affected:** `src/index.ts`, `src/adapters/discord/client.ts`, `src/adapters/discord/registry.ts`, `src/features/identity/discord/*.ts`, `src/features/identity/app/*.ts`, `src/features/identity/infra/*.ts`
-- **Description:** The codebase extensively uses `console.log`, `console.error`, and `console.warn` instead of the specified Pino logger. This violates the AGENTS.md logging standard requiring Pino with stable fields (`component`, `guildId`, `channelId`, `userId`, `interactionId`, `route`, `status`).
-- **Code Snippets:**
-  ```typescript
-  // src/index.ts:45-47
-  console.log(`📝 Executing command: /${interaction.commandName} by ${interaction.user.tag} (${interaction.user.id})`);
-  console.log(`sub-command: ${interaction.options.getSubcommand()}`)
-  console.log(`options: ${JSON.stringify(interaction.options.data)}`)
-  ```
-- **Proposed Fix:** Implement Pino logger wrapper and replace all console statements with structured logging calls including required fields.
+**Impact:** The current structure duplicates code across features, leaves critical roadmap items unimplemented, and introduces infrastructure tasks that can never pass in CI/CD.
 
-#### Insufficient Error Handling
-- **Severity:** High
-- **Impact:** Application crashes, data corruption, poor user experience
-- **Files Affected:** `src/index.ts`, `src/features/identity/discord/*.ts`, `src/features/identity/app/*.ts`
-- **Description:** Many functions lack try-catch blocks, and error handling is inconsistent. Database operations and Discord API calls can fail silently or cause unhandled exceptions.
-- **Code Snippets:**
-  ```typescript
-  // src/features/identity/discord/form.autocomplete.ts:23-27
-  } catch (error) {
-      console.error('Error in form autocomplete:', error);
-      return interaction.respond([]);
-  }
-  ```
-- **Proposed Fix:** Implement comprehensive error handling with proper error types, logging, and graceful degradation.
+---
 
-#### Code Duplication
-- **Severity:** Medium
-- **Impact:** Maintenance burden, potential inconsistencies
-- **Files Affected:** `src/features/identity/discord/*.ts`
-- **Description:** Repeated patterns for validation, error responses, and interaction handling across Discord command files.
-- **Code Snippets:** Similar validation and error handling code appears in `form.add.ts`, `form.edit.ts`, `form.delete.ts`.
-- **Proposed Fix:** Extract common utilities and create shared error handling middleware.
+## 6. Prioritized Remediation Plan
+1. **Fix broken flows first (critical):**
+   - Remove `deferReply` from `/form edit`, show the modal within 3s, and replace `deferUpdate` with `deferReply` in `handleModalSubmit`. Provide targeted validation errors instead of generic fallbacks.
+   - Correct the short-alias condition in `createForm` and add regression tests to ensure both default aliases are created.
+   - Move webhook attachment payloads out of the JSON body and into the REST client's `files` option so `/send` and tag proxies can deliver files again.
+2. **Restore observability (high):**
+   - Replace every `console.*` call with the shared logger (ready event, listener, autocomplete handlers) and thread contextual fields (`component`, `userId`, etc.).
+   - Teach autocomplete handlers to surface actionable errors (e.g., "Failed to load forms") instead of silently returning `[]`.
+3. **Eliminate O(n) scans (medium):**
+   - Introduce repository helpers (`getAliasById`, `listAliasesByUserGrouped`) so `removeAlias`, `matchAlias`, and `listForms` can issue targeted queries.
+   - Cache alias lists per user (in-memory or Redis) with invalidation on write to honor the "longest prefix wins" rule without hammering the database.
+4. **Finish the promised proxy surface (medium):**
+   - Implement the message context menus and edit/delete flows, wiring them through `ChannelProxyPort.edit/delete` and the stored webhook IDs.
+   - Add reply-style rendering to `/send` replies (currently only the listener builds reply headers via `buildReplyStyle`).
+5. **Stabilize infrastructure (medium):**
+   - Split the Docker "migrate" service into a pure migration runner and a separate runtime. Ship the entire source tree (or at least the schema dependencies) required by `drizzle-kit generate`.
+   - Replace the placeholder unit tests with slice-level coverage (e.g., normalization, alias matching, proxy coordinator).
 
-### 2. Security Vulnerabilities
+---
 
-#### Missing Input Validation
-- **Severity:** Critical
-- **Impact:** SQL injection, XSS, data corruption
-- **Files Affected:** `src/features/identity/discord/*.ts`, `src/features/identity/app/*.ts`
-- **Description:** User inputs are not sufficiently validated. While some basic checks exist, complex inputs (URLs, names) lack proper sanitization.
-- **Code Snippets:**
-  ```typescript
-  // src/features/identity/discord/form.add.ts:24-30
-  // Validate name
-  if (!name.trim()) {
-      return interaction.editReply({
-          content: 'Form name cannot be empty.',
-          allowedMentions: DEFAULT_ALLOWED_MENTIONS
-      });
-  }
-  ```
-- **Proposed Fix:** Implement comprehensive input validation using Zod schemas or similar validation libraries.
-
-#### Potential SQL Injection via UUID Handling
-- **Severity:** High
-- **Impact:** Database compromise
-- **Files Affected:** `src/shared/db/uuidDetection.ts`, `src/features/identity/infra/*.ts`
-- **Description:** UUID generation and handling could be vulnerable if not properly escaped in raw SQL queries.
-- **Code Snippets:**
-  ```typescript
-  // src/shared/db/uuidDetection.ts:36-37
-  const result = await db.execute(sql`SELECT uuidv7()`);
-  ```
-- **Proposed Fix:** Use parameterized queries and ensure all database inputs are properly sanitized.
-
-### 3. Performance Issues
-
-#### Inefficient Database Queries
-- **Severity:** Medium
-- **Impact:** Slow response times, high database load
-- **Files Affected:** `src/features/identity/app/ListForms.ts`, `src/features/identity/infra/*.ts`
-- **Description:** N+1 query problem in `ListForms.ts` where aliases are fetched individually for each form.
-- **Code Snippets:**
-  ```typescript
-  // src/features/identity/app/ListForms.ts:30-35
-  for (const form of forms) {
-      const aliases = await aliasRepo.getByForm(form.id);
-      // ...
-  }
-  ```
-- **Proposed Fix:** Use database joins or batch queries to fetch forms with aliases in a single operation.
-
-#### Missing Database Connection Pooling
-- **Severity:** Medium
-- **Impact:** Resource exhaustion under load
-- **Files Affected:** `src/shared/db/client.ts`
-- **Description:** Database client is created without explicit connection pooling configuration.
-- **Proposed Fix:** Configure connection pooling parameters in the database client setup.
-
-### 4. Functionality Gaps
-
-#### Missing Proxy Feature Implementation
-- **Severity:** High
-- **Impact:** Core functionality incomplete
-- **Files Affected:** N/A (entire `src/features/proxy/` directory missing)
-- **Description:** According to AGENTS.md, the proxy feature should handle message proxying, `/send` command, context menus, and reply-style rendering. This entire feature is not implemented.
-- **Proposed Fix:** Implement the complete proxy feature as specified in AGENTS.md sections 4 and 5.
-
-#### Incomplete Command Set
-- **Severity:** High
-- **Impact:** Users cannot perform key operations
-- **Files Affected:** N/A
-- **Description:** `/alias` commands and context menus are not implemented. Only `/form` and `/ping` exist.
-- **Proposed Fix:** Implement missing commands and context menus as per AGENTS.md section 5.
-
-#### Missing ChannelProxyPort Interface
-- **Severity:** Medium
-- **Impact:** Architecture incomplete
-- **Files Affected:** `src/shared/ports/ChannelProxyPort.ts` (file missing)
-- **Description:** The core port interface for webhook operations is not implemented.
-- **Proposed Fix:** Create the ChannelProxyPort interface and DiscordChannelProxy adapter.
-
-### 5. Architecture Deviations
-
-#### Inconsistent Layer Separation
-- **Severity:** Medium
-- **Impact:** Maintainability and testability reduced
-- **Files Affected:** `src/features/identity/discord/*.ts`
-- **Description:** Some business logic has leaked into Discord handlers instead of staying in the `app` layer.
-- **Code Snippets:** Form validation logic in `form.add.ts` should be in `CreateForm.ts`.
-- **Proposed Fix:** Move all business logic to `app` layer and keep Discord handlers thin.
-
-#### Missing Repository Interfaces
-- **Severity:** Low
-- **Impact:** Tight coupling between layers
-- **Files Affected:** `src/features/identity/infra/*.ts`
-- **Description:** Repositories implement interfaces but the interfaces are not defined separately.
-- **Proposed Fix:** Extract repository interfaces to improve testability and decoupling.
-
-### 6. Discord-Specific Issues
-
-#### Violation of 3-Second Interaction Rule
-- **Severity:** Critical
-- **Impact:** Interactions fail, poor UX
-- **Files Affected:** `src/features/identity/discord/form.list.ts`, `src/features/identity/discord/form.add.ts`
-- **Description:** Some operations (database queries) may exceed 3 seconds without deferring.
-- **Code Snippets:** `form.list.ts` defers but `form.add.ts` does not always defer appropriately.
-- **Proposed Fix:** Implement consistent deferring for all potentially slow operations.
-
-#### Component Limit Violations
-- **Severity:** Medium
-- **Impact:** UI failures
-- **Files Affected:** `src/shared/utils/pagination.ts`
-- **Description:** Pagination implementation may create more than 5 action rows in edge cases.
-- **Proposed Fix:** Ensure pagination respects Discord's 5-row limit.
-
-#### Inconsistent Allowed Mentions
-- **Severity:** Medium
-- **Impact:** Accidental pings
-- **Files Affected:** Various Discord handlers
-- **Description:** Not all messages set allowed mentions explicitly.
-- **Proposed Fix:** Audit and ensure all interactions set allowed mentions appropriately.
-
-### 7. Testing and Quality Assurance
-
-#### Insufficient Test Coverage
-- **Severity:** High
-- **Impact:** Bugs in production, unreliable deployments
-- **Files Affected:** `tests/` directory
-- **Description:** Test files exist but coverage appears minimal. No integration tests for Discord interactions.
-- **Proposed Fix:** Implement comprehensive unit and integration tests.
-
-#### Missing Quality Gate Verification
-- **Severity:** High
-- **Impact:** Unreliable deployments
-- **Files Affected:** N/A
-- **Description:** No automated checks for build, lint, typecheck, or runtime sanity.
-- **Proposed Fix:** Implement CI/CD pipeline with quality gates.
-
-## Deviations from AGENTS.md Intentions
-
-### Current Implementation Status vs. PR Sequencing
-
-1. **Bootstrap + DB wiring + `/ping`** ✅ Partially Complete
-   - Database setup exists but logging standard not followed
-   - `/ping` implemented but without proper logging
-
-2. **Identity: /form add/list/edit/delete** ✅ Implemented but with issues
-   - Commands exist but lack proper error handling and logging
-   - Auto-default aliases implemented but with potential collision issues
-
-3. **Aliases: /alias add/list/remove** ❌ Not Implemented
-   - No `/alias` commands exist
-
-4. **Proxy: tag listener + `/send`** ❌ Not Implemented
-   - No proxy feature exists
-
-5. **Message ops: context menus** ❌ Not Implemented
-   - No context menus implemented
-
-6. **Reply-style: header + quote** ❌ Not Implemented
-   - No reply-style rendering
-
-### Key Architectural Misalignments
-
-- **Logging Standard Violation:** AGENTS.md mandates Pino with specific fields, but console.log is used throughout
-- **Missing Features:** Proxy functionality is completely absent despite being core to the project
-- **Incomplete UI Surface:** Only `/form` commands exist; `/alias`, `/send`, and context menus missing
-- **Port Implementation:** ChannelProxyPort interface not implemented
-
-## Prioritized Improvement Plan
-
-### Phase 1: Critical Fixes (Immediate)
-1. Implement Pino logging throughout the application
-2. Add comprehensive error handling and input validation
-3. Fix 3-second interaction rule violations
-4. Address security vulnerabilities in input handling
-
-### Phase 2: Core Functionality (Week 1-2)
-1. Implement missing proxy feature
-2. Add `/alias` commands
-3. Create context menus
-4. Implement reply-style rendering
-
-### Phase 3: Quality and Performance (Week 3-4)
-1. Optimize database queries
-2. Add comprehensive test coverage
-3. Implement CI/CD with quality gates
-4. Performance monitoring and optimization
-
-### Phase 4: Production Readiness (Week 5-6)
-1. Security audit and hardening
-2. Documentation completion
-3. Load testing and scaling
-4. Production deployment preparation
-
-## Conclusion
-
-The Shapeshift codebase shows promising architectural foundations aligned with AGENTS.md specifications, but requires significant work to reach production readiness. The most critical issues involve logging, error handling, and missing core functionality. Addressing these deficiencies systematically will transform this into a robust, maintainable Discord bot that fulfills its design intentions.
+## Review Guide
+Start by examining the interaction regressions in `src/features/identity/discord/form.edit.ts`, then verify the corrected alias defaults in `src/features/identity/app/CreateForm.ts`, and finally inspect `src/adapters/discord/DiscordChannelProxy.ts` to ensure webhook payloads (especially attachments) conform to Discord's REST contract. These three files drive the majority of the user-facing breakages outlined above.
