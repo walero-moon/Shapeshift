@@ -1,5 +1,6 @@
 import { AutocompleteInteraction } from 'discord.js';
 import { listForms } from '../app/ListForms';
+import { log } from '../../../shared/utils/logger';
 
 export async function execute(interaction: AutocompleteInteraction) {
     const focusedOption = interaction.options.getFocused(true);
@@ -24,7 +25,7 @@ export async function execute(interaction: AutocompleteInteraction) {
     } catch (error) {
         // For autocomplete, we can't use handleInteractionError as it expects reply/editReply methods
         // Instead, log the error and respond with empty array
-        console.error('Error in alias autocomplete', {
+        log.error('Error in alias autocomplete', {
             component: 'identity',
             userId: interaction.user.id,
             guildId: interaction.guild?.id,

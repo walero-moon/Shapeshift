@@ -13,15 +13,6 @@ import { reuploadAttachments } from '../../../shared/utils/attachments';
  * Listens for guild text messages that match user aliases and proxies them as forms
  */
 export async function messageCreateProxy(message: Message) {
-    console.log('🔍 DEBUG: messageCreateProxy called', {
-        userId: message.author.id,
-        channelId: message.channelId,
-        guildId: message.guildId,
-        content: message.content,
-        hasAttachments: message.attachments.size > 0,
-        isBot: message.author.bot,
-    });
-
     log.debug('Message received', {
         component: 'proxy',
         userId: message.author.id,
@@ -35,7 +26,6 @@ export async function messageCreateProxy(message: Message) {
 
     // Skip bot messages
     if (message.author.bot) {
-        console.log('🔍 DEBUG: Skipping bot message');
         log.debug('Skipping bot message', {
             component: 'proxy',
             userId: message.author.id,
@@ -46,7 +36,6 @@ export async function messageCreateProxy(message: Message) {
 
     // Skip messages without content
     if (!message.content) {
-        console.log('🔍 DEBUG: Skipping message without content');
         log.debug('Skipping message without content', {
             component: 'proxy',
             userId: message.author.id,
@@ -57,7 +46,6 @@ export async function messageCreateProxy(message: Message) {
 
     // Ignore DMs - only process guild messages
     if (!message.guildId) {
-        console.log('🔍 DEBUG: Skipping DM message');
         log.debug('Skipping DM message', {
             component: 'proxy',
             userId: message.author.id,
@@ -65,8 +53,6 @@ export async function messageCreateProxy(message: Message) {
         });
         return;
     }
-
-    console.log('🔍 DEBUG: Passed all filters, proceeding to alias matching');
 
     log.debug('Processing guild message for proxying', {
         component: 'proxy',
@@ -78,15 +64,8 @@ export async function messageCreateProxy(message: Message) {
     });
 
     try {
-        console.log('🔍 DEBUG: About to call matchAlias');
         // Check if message matches any alias for the user
         const match = await matchAlias(message.author.id, message.content);
-
-        console.log('🔍 DEBUG: matchAlias result', {
-            matchFound: !!match,
-            aliasId: match?.alias.id,
-            renderedText: match?.renderedText,
-        });
 
         log.debug('Alias matching result', {
             component: 'proxy',
@@ -99,7 +78,6 @@ export async function messageCreateProxy(message: Message) {
         });
 
         if (!match) {
-            console.log('🔍 DEBUG: No alias match found, skipping proxy');
             log.debug('No alias match found, skipping proxy', {
                 component: 'proxy',
                 userId: message.author.id,
@@ -107,8 +85,6 @@ export async function messageCreateProxy(message: Message) {
             });
             return;
         }
-
-        console.log('🔍 DEBUG: Alias match found, proceeding to form lookup');
 
         // Get the form associated with the matched alias
         const form = await formRepo.getById(match.alias.formId);
@@ -173,7 +149,6 @@ export async function messageCreateProxy(message: Message) {
                 channelId: message.reference.channelId,
                 messageId: message.reference.messageId
             };
-            console.log('🔍 DEBUG: replyTo detected', replyTo);
             log.debug('Reply context detected', {
                 component: 'proxy',
                 userId: message.author.id,
@@ -181,7 +156,6 @@ export async function messageCreateProxy(message: Message) {
                 status: 'reply_context_detected'
             });
         } else {
-            console.log('🔍 DEBUG: no replyTo context');
             log.debug('No reply context', {
                 component: 'proxy',
                 userId: message.author.id,

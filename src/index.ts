@@ -17,7 +17,7 @@ registry.registerCommand(pingCommand);
 
 // Enhanced ready event with comprehensive logging
 client.once(Events.ClientReady, (readyClient) => {
-    console.log(`
+    log.info(`
 🚀 ======================================= 🚀
 ███████╗██╗  ██╗ █████╗ ██████╗ ███████╗███████╗██╗  ██╗██╗███████╗████████╗
 ██╔════╝██║  ██║██╔══██╗██╔══██╗██╔════╝██╔════╝██║  ██║██║██╔════╝╚══██╔══╝
@@ -32,7 +32,13 @@ client.once(Events.ClientReady, (readyClient) => {
 👥 Serving ${readyClient.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0)} total members
 🕐 Started at: ${new Date().toLocaleString()}
 🚀 ======================================= 🚀
-    `);
+    `, {
+        component: 'bot',
+        userId: readyClient.user.id,
+        guildCount: readyClient.guilds.cache.size,
+        totalMembers: readyClient.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0),
+        status: 'ready'
+    });
 });
 
 // Enhanced interaction handler with better error handling and logging

@@ -11,7 +11,7 @@ describe('assembleWebhookPayload', () => {
     it('should assemble payload with reply-style', () => {
         const replyStyle = {
             headerLine: '*↩︎ Replying to @User*',
-            quoteLine: '> This is a quote',
+            allowedMentions: { parse: [] },
         };
 
         const result = assembleWebhookPayload('Hello world', replyStyle);
@@ -22,7 +22,7 @@ describe('assembleWebhookPayload', () => {
     it('should assemble payload with reply-style but no jump button', () => {
         const replyStyle = {
             headerLine: '*↩︎ Replying to @User*',
-            quoteLine: '> This is a quote',
+            allowedMentions: { parse: [] },
         };
 
         const result = assembleWebhookPayload('Hello world', replyStyle);
