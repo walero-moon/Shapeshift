@@ -30,6 +30,47 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             allowedMentions: DEFAULT_ALLOWED_MENTIONS
         });
     } catch (error) {
+        // Handle validation errors with user-friendly messages
+        if (error instanceof Error) {
+            const errorMessage = error.message;
+
+            if (errorMessage === 'Alias trigger is required') {
+                return await interaction.editReply({
+                    content: '❌ Alias trigger cannot be empty. Please provide a trigger text.',
+                    allowedMentions: DEFAULT_ALLOWED_MENTIONS
+                });
+            }
+
+            if (errorMessage === 'Alias trigger must contain the literal word "text"') {
+                return await interaction.editReply({
+                    content: '❌ Alias trigger must contain the literal word "text". For example: `neoli:text` or `{text}`.',
+                    allowedMentions: DEFAULT_ALLOWED_MENTIONS
+                });
+            }
+
+            if (errorMessage === 'Form not found') {
+                return await interaction.editReply({
+                    content: '❌ The selected form was not found. It may have been deleted.',
+                    allowedMentions: DEFAULT_ALLOWED_MENTIONS
+                });
+            }
+
+            if (errorMessage === 'Form does not belong to user') {
+                return await interaction.editReply({
+                    content: '❌ You do not own this form.',
+                    allowedMentions: DEFAULT_ALLOWED_MENTIONS
+                });
+            }
+
+            if (errorMessage.startsWith('Alias "') && errorMessage.includes('" already exists for this user')) {
+                return await interaction.editReply({
+                    content: `❌ ${errorMessage}`,
+                    allowedMentions: DEFAULT_ALLOWED_MENTIONS
+                });
+            }
+        }
+
+        // For unexpected errors, use the generic handler
         await handleInteractionError(interaction, error, {
             component: 'identity',
             userId: interaction.user.id,
