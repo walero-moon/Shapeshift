@@ -1,6 +1,6 @@
 import { formRepo } from '../infra/FormRepo';
 import { aliasRepo } from '../infra/AliasRepo';
-import { normalizeAlias, getAliasKind } from './NormalizeAlias';
+import { normalizeAlias, getAliasKind } from './normalizeAlias';
 import log from '../../../shared/utils/logger';
 
 export interface CreateFormInput {
@@ -80,7 +80,7 @@ export async function createForm(userId: string, input: CreateFormInput): Promis
 
             // Create short alias: "<first_letter>:text"
             const firstLetter = name.charAt(0).toLowerCase();
-            if (name.length > 1 && firstLetter !== name.charAt(0)) {
+            if (name.length > 1) {
                 const shortAlias = `${firstLetter}:text`;
                 const shortNorm = await normalizeAlias(shortAlias);
                 const shortKind = getAliasKind(shortNorm);

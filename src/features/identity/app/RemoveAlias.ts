@@ -10,11 +10,10 @@ import log from '../../../shared/utils/logger';
 export async function removeAlias(aliasId: string, userId: string): Promise<void> {
     try {
         // First verify that the alias belongs to the user
-        const userAliases = await aliasRepo.getByUser(userId);
-        const alias = userAliases.find(a => a.id === aliasId);
+        const alias = await aliasRepo.getById(aliasId, userId);
 
         // Check if alias exists and belongs to the user
-        if (!alias || alias.userId !== userId) {
+        if (!alias) {
             throw new Error('Alias not found or does not belong to user');
         }
 

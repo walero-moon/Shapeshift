@@ -24,6 +24,7 @@ export interface AliasRepo {
   create(userId: string, formId: string, data: CreateAliasData): Promise<Alias>;
   getByForm(formId: string): Promise<Alias[]>;
   getByUser(userId: string): Promise<Alias[]>;
+  getById(id: string, userId: string): Promise<Alias | null>;
   delete(aliasId: string): Promise<void>;
   findCollision(userId: string, triggerNorm: string): Promise<Alias | null>;
 }
@@ -94,6 +95,21 @@ export class DrizzleAliasRepo implements AliasRepo {
       return result;
     } catch (error) {
       log.error('Failed to get aliases by user', { component: 'identity', userId, status: 'database_error', error });
+      throw error;
+    }
+  }
+
+  async getById(id: string, userId: string): Promise<Alias | null> {
+    try {
+      const result = await db.select()
+        .from(aliases)
+        .where(and(
+          eq(aliases.id, id),
+          eq(aliases.userId, userId)
+        ));
+      return result[0] || null;
+    } catch (error) {
+      log.error('Failed to get alias by id', { component: 'identity', userId, aliasId: id, status: 'database_error', error });
       throw error;
     }
   }

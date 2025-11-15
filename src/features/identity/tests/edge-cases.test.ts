@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createForm } from '../app/CreateForm';
 import { editForm } from '../app/EditForm';
 import { addAlias } from '../app/AddAlias';
-import { normalizeAlias } from '../app/NormalizeAlias';
+import { normalizeAlias } from '../app/normalizeAlias';
 import { formRepo } from '../infra/FormRepo';
 import { aliasRepo } from '../infra/AliasRepo';
 

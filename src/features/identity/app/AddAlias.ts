@@ -1,6 +1,6 @@
 import { formRepo } from '../infra/FormRepo';
 import { aliasRepo } from '../infra/AliasRepo';
-import { normalizeAlias, getAliasKind } from './NormalizeAlias';
+import { normalizeAlias, getAliasKind } from './normalizeAlias';
 import log from '../../../shared/utils/logger';
 
 export interface AddAliasInput {

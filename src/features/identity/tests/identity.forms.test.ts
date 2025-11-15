@@ -253,6 +253,80 @@ describe('createForm function', () => {
             },
         ]);
     });
+
+    it('should create form with default aliases for lowercase name', async () => {
+        // Mock form creation
+        const mockForm = {
+            id: 'form1',
+            userId: 'user1',
+            name: 'alice',
+            avatarUrl: 'https://example.com/avatar.png',
+            createdAt: new Date(),
+        };
+        vi.mocked(formRepo.create).mockResolvedValue(mockForm);
+
+        // Mock no alias collisions
+        vi.mocked(aliasRepo.findCollision).mockResolvedValue(null);
+
+        // Mock alias creation
+        const mockAlias1 = {
+            id: 'alias1',
+            userId: 'user1',
+            formId: 'form1',
+            triggerRaw: 'alice:text',
+            triggerNorm: 'alice:text',
+            kind: 'prefix' as const,
+            createdAt: new Date(),
+        };
+        const mockAlias2 = {
+            id: 'alias2',
+            userId: 'user1',
+            formId: 'form1',
+            triggerRaw: 'a:text',
+            triggerNorm: 'a:text',
+            kind: 'prefix' as const,
+            createdAt: new Date(),
+        };
+        vi.mocked(aliasRepo.create)
+            .mockResolvedValueOnce(mockAlias1)
+            .mockResolvedValueOnce(mockAlias2);
+
+        const input: CreateFormInput = {
+            name: 'alice',
+            avatarUrl: 'https://example.com/avatar.png',
+        };
+        const result = await createForm('user1', input);
+
+        expect(result).toEqual({
+            form: {
+                id: mockForm.id,
+                name: mockForm.name,
+                avatarUrl: mockForm.avatarUrl,
+                createdAt: mockForm.createdAt,
+            },
+            defaultAliases: [
+                {
+                    triggerRaw: mockAlias1.triggerRaw,
+                    triggerNorm: mockAlias1.triggerNorm,
+                    kind: mockAlias1.kind,
+                },
+                {
+                    triggerRaw: mockAlias2.triggerRaw,
+                    triggerNorm: mockAlias2.triggerNorm,
+                    kind: mockAlias2.kind,
+                },
+            ],
+            skippedAliases: [],
+        });
+
+        expect(formRepo.create).toHaveBeenCalledWith('user1', {
+            name: 'alice',
+            avatarUrl: 'https://example.com/avatar.png',
+        });
+
+        // Should create two default aliases
+        expect(aliasRepo.create).toHaveBeenCalledTimes(2);
+    });
 });
 
 describe('editForm function', () => {

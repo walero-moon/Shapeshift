@@ -229,6 +229,17 @@ describe('AliasRepo error handling', () => {
         await expect(aliasRepo.getByUser('user1')).rejects.toThrow('Query failed');
     });
 
+    it('should handle database errors during alias lookup by id', async () => {
+        const mockWhere = vi.fn().mockRejectedValue(new Error('Query failed'));
+        mockDb.select.mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: mockWhere,
+            }),
+        });
+
+        await expect(aliasRepo.getById('alias1', 'user1')).rejects.toThrow('Query failed');
+    });
+
     // Note: AliasRepo doesn't have update method - removed tests
     it('should handle database errors during alias deletion', async () => {
         const mockDeleteWhere = vi.fn().mockRejectedValue(new Error('Deletion failed'));

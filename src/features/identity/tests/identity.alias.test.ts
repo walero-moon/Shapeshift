@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { normalizeAlias, getAliasKind } from '../app/NormalizeAlias';
+import { normalizeAlias, getAliasKind } from '../app/normalizeAlias';
 import { addAlias, AddAliasInput } from '../app/AddAlias';
 import { listAliases } from '../app/ListAliases';
 import { removeAlias } from '../app/RemoveAlias';
@@ -22,6 +22,7 @@ vi.mock('../infra/AliasRepo', () => ({
         create: vi.fn(),
         getByForm: vi.fn(),
         getByUser: vi.fn(),
+        getById: vi.fn(),
         delete: vi.fn(),
         findCollision: vi.fn(),
     },
@@ -355,46 +356,39 @@ describe('removeAlias function', () => {
             createdAt: new Date(),
         };
 
-        vi.mocked(aliasRepo.getByUser).mockResolvedValue([mockAlias]);
+        vi.mocked(aliasRepo.getById).mockResolvedValue(mockAlias);
         vi.mocked(aliasRepo.delete).mockResolvedValue(undefined);
 
         await removeAlias('alias1', 'user1');
 
+        expect(aliasRepo.getById).toHaveBeenCalledWith('alias1', 'user1');
         expect(aliasRepo.delete).toHaveBeenCalledWith('alias1');
     });
 
     it('should handle alias not found', async () => {
-        vi.mocked(aliasRepo.getByUser).mockResolvedValue([]);
+        vi.mocked(aliasRepo.getById).mockResolvedValue(null);
 
         await expect(removeAlias('nonexistent', 'user1')).rejects.toThrow(
             'Alias not found or does not belong to user'
         );
 
+        expect(aliasRepo.getById).toHaveBeenCalledWith('nonexistent', 'user1');
         expect(aliasRepo.delete).not.toHaveBeenCalled();
     });
 
     it('should handle alias belonging to different user', async () => {
-        const mockAlias = {
-            id: 'alias1',
-            userId: 'user2',
-            formId: 'form1',
-            triggerRaw: 'n:text',
-            triggerNorm: 'n:text',
-            kind: 'prefix' as const,
-            createdAt: new Date(),
-        };
-
-        vi.mocked(aliasRepo.getByUser).mockResolvedValue([mockAlias]);
+        vi.mocked(aliasRepo.getById).mockResolvedValue(null);
 
         await expect(removeAlias('alias1', 'user1')).rejects.toThrow(
             'Alias not found or does not belong to user'
         );
 
+        expect(aliasRepo.getById).toHaveBeenCalledWith('alias1', 'user1');
         expect(aliasRepo.delete).not.toHaveBeenCalled();
     });
 
     it('should handle database errors during alias lookup', async () => {
-        vi.mocked(aliasRepo.getByUser).mockRejectedValue(new Error('Database connection failed'));
+        vi.mocked(aliasRepo.getById).mockRejectedValue(new Error('Database connection failed'));
 
         await expect(removeAlias('alias1', 'user1')).rejects.toThrow('Database connection failed');
         expect(aliasRepo.delete).not.toHaveBeenCalled();
@@ -411,7 +405,7 @@ describe('removeAlias function', () => {
             createdAt: new Date(),
         };
 
-        vi.mocked(aliasRepo.getByUser).mockResolvedValue([mockAlias]);
+        vi.mocked(aliasRepo.getById).mockResolvedValue(mockAlias);
         vi.mocked(aliasRepo.delete).mockRejectedValue(new Error('Deletion failed'));
 
         await expect(removeAlias('alias1', 'user1')).rejects.toThrow('Deletion failed');

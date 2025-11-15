@@ -100,9 +100,9 @@ export class DiscordChannelProxy implements ChannelProxyPort {
                         ...payload,
                         username: data.username,
                         avatar_url: data.avatarUrl,
-                        allowed_mentions: allowedMentions,
-                        files: webhookFiles
-                    }
+                        allowed_mentions: allowedMentions
+                    },
+                    files: webhookFiles
                 })
             ) as { id: string }; // Discord API response for webhook execute with wait=true
 
@@ -141,9 +141,9 @@ export class DiscordChannelProxy implements ChannelProxyPort {
                 client.rest.patch(Routes.webhookMessage(webhookId, webhookToken, messageId), {
                     body: {
                         content: data.content.length > 2000 ? data.content.slice(0, 2000) : data.content,
-                        allowed_mentions: data.allowedMentions,
-                        files: webhookFiles
-                    }
+                        allowed_mentions: data.allowedMentions
+                    },
+                    files: webhookFiles
                 })
             );
         }, context);
