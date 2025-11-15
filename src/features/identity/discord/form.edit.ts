@@ -5,7 +5,8 @@ import {
     TextInputBuilder,
     TextInputStyle,
     ActionRowBuilder,
-    ModalSubmitInteraction
+    ModalSubmitInteraction,
+    MessageFlags
 } from 'discord.js';
 import { editForm } from '../app/EditForm';
 import { listForms } from '../app/ListForms';
@@ -66,7 +67,7 @@ export async function handleModalSubmit(interaction: ModalSubmitInteraction): Pr
     const [action, formId] = interaction.customId.split(':');
     if (action !== 'edit_form' || !formId) return;
 
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
         const newName = interaction.fields.getTextInputValue('name').trim();
