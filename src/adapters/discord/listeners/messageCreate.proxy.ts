@@ -64,6 +64,7 @@ export async function messageCreateProxy(message: Message) {
         status: 'processing'
     });
 
+    const proxyStart = performance.now();
     try {
         // Check if message matches any alias for the user
         const aliasMatchStart = performance.now();
@@ -293,12 +294,25 @@ export async function messageCreateProxy(message: Message) {
             'Failed to delete original message after proxy'
         );
 
+        // Log total proxy operation duration
+        const totalDuration = performance.now() - proxyStart;
+        log.info('Proxy operation completed successfully', {
+            component: 'proxy',
+            userId: message.author.id,
+            guildId: message.guildId || undefined,
+            channelId: message.channelId,
+            durationMs: totalDuration,
+            status: 'proxy_complete'
+        });
+
     } catch (error) {
+        const totalDuration = performance.now() - proxyStart;
         log.error('Failed to proxy message via tag', {
             component: 'proxy',
             userId: message.author.id,
             guildId: message.guildId,
             channelId: message.channelId,
+            durationMs: totalDuration,
             status: 'proxy_error',
             error
         });
