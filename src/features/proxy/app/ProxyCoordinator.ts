@@ -1,4 +1,4 @@
-import { formRepo } from '../../identity/infra/FormRepo';
+import { formRepo, Form } from '../../identity/infra/FormRepo';
 import { buildProxyMessage } from './BuildProxyMessage';
 import { ChannelProxyPort, SendMessageData, ProxyAttachment } from '../../../shared/ports/ChannelProxyPort';
 import { proxiedMessageRepo } from '../infra/ProxiedMessageRepo';
@@ -18,7 +18,8 @@ export async function proxyCoordinator(
     body: string,
     channelProxy: ChannelProxyPort,
     attachments?: ProxyAttachment[], // Reuploaded attachments in standardized format
-    _replyTo?: { guildId: string; channelId: string; messageId: string }
+    _replyTo?: { guildId: string; channelId: string; messageId: string },
+    form?: Form
 ): Promise<{ webhookId: string; token: string; messageId: string }> {
     try {
         log.info('Starting proxy coordination', {
@@ -30,14 +31,24 @@ export async function proxyCoordinator(
             status: 'proxy_start'
         });
 
-        // Fetch form
-        const form = await formRepo.getById(formId);
-        if (!form) {
+        // Fetch form if not provided
+        const resolvedForm = form ?? await formRepo.getById(formId);
+        if (!resolvedForm) {
             throw new Error(`Form with ID ${formId} not found`);
         }
 
+        log.debug('Form resolved for proxy coordination', {
+            component: 'proxy',
+            userId,
+            formId,
+            guildId,
+            channelId,
+            formPrefetched: !!form,
+            status: 'form_resolved'
+        });
+
         // Build proxy message payload
-        const payload = buildProxyMessage(form, body, attachments);
+        const payload = buildProxyMessage(resolvedForm, body, attachments);
 
         // Send via channel proxy
         const sendData: SendMessageData = {

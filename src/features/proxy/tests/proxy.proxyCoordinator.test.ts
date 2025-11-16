@@ -276,4 +276,113 @@ describe('proxyCoordinator function', () => {
             error: expect.any(Error)
         }));
     });
+
+    it('should use pre-fetched form and skip database query', async () => {
+        const mockSendResult = {
+            webhookId: 'webhook123',
+            webhookToken: 'token456',
+            messageId: 'msg789',
+        };
+        mockChannelProxy.send.mockResolvedValue(mockSendResult);
+
+        const result = await proxyCoordinator(
+            'user1',
+            'form1',
+            'channel1',
+            'guild1',
+            'Hello world!',
+            mockChannelProxy,
+            undefined, // attachments
+            undefined, // replyTo
+            mockForm // pre-fetched form
+        );
+
+        expect(result).toEqual({
+            webhookId: 'webhook123',
+            token: 'token456',
+            messageId: 'msg789',
+        });
+
+        // Should not call formRepo.getById when form is provided
+        expect(formRepo.getById).not.toHaveBeenCalled();
+
+        // Should log that form was pre-fetched
+        expect(log.debug).toHaveBeenCalledWith('Form resolved for proxy coordination', expect.objectContaining({
+            component: 'proxy',
+            userId: 'user1',
+            formId: 'form1',
+            guildId: 'guild1',
+            channelId: 'channel1',
+            formPrefetched: true,
+            status: 'form_resolved'
+        }));
+
+        // Should use the provided form for building payload
+        expect(mockChannelProxy.send).toHaveBeenCalledWith({
+            username: 'TestForm',
+            content: 'Hello world!',
+            allowedMentions: { parse: [], repliedUser: false },
+            avatarUrl: 'https://example.com/avatar.png',
+        }, undefined);
+    });
+
+    it('should handle pre-fetched form with null avatar', async () => {
+        const formWithNullAvatar = { ...mockForm, avatarUrl: null };
+        const mockSendResult = {
+            webhookId: 'webhook123',
+            webhookToken: 'token456',
+            messageId: 'msg789',
+        };
+        mockChannelProxy.send.mockResolvedValue(mockSendResult);
+
+        await proxyCoordinator(
+            'user1',
+            'form1',
+            'channel1',
+            'guild1',
+            'Hello world!',
+            mockChannelProxy,
+            undefined, // attachments
+            undefined, // replyTo
+            formWithNullAvatar // pre-fetched form
+        );
+
+        expect(formRepo.getById).not.toHaveBeenCalled();
+        expect(mockChannelProxy.send).toHaveBeenCalledWith({
+            username: 'TestForm',
+            content: 'Hello world!',
+            allowedMentions: { parse: [], repliedUser: false },
+        }, undefined);
+        expect(mockChannelProxy.send).not.toHaveBeenCalledWith(
+            expect.objectContaining({ avatarUrl: expect.anything() })
+        );
+    });
+
+    it('should log formPrefetched false when form is not provided', async () => {
+        const mockSendResult = {
+            webhookId: 'webhook123',
+            webhookToken: 'token456',
+            messageId: 'msg789',
+        };
+        mockChannelProxy.send.mockResolvedValue(mockSendResult);
+
+        await proxyCoordinator(
+            'user1',
+            'form1',
+            'channel1',
+            'guild1',
+            'Hello world!',
+            mockChannelProxy
+        );
+
+        expect(log.debug).toHaveBeenCalledWith('Form resolved for proxy coordination', expect.objectContaining({
+            component: 'proxy',
+            userId: 'user1',
+            formId: 'form1',
+            guildId: 'guild1',
+            channelId: 'channel1',
+            formPrefetched: false,
+            status: 'form_resolved'
+        }));
+    });
 });

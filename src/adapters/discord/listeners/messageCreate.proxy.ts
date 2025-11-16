@@ -66,53 +66,44 @@ export async function messageCreateProxy(message: Message) {
 
     const proxyStart = performance.now();
     try {
-        // Check if message matches any alias for the user
-        const aliasMatchStart = performance.now();
-        const match = await matchAlias(message.author.id, message.content);
-        const aliasMatchDuration = performance.now() - aliasMatchStart;
-        log.debug('Proxy stage complete', {
-            stage: 'aliasMatch',
-            durationMs: aliasMatchDuration,
-            component: 'proxy',
-            userId: message.author.id,
-            guildId: message.guildId || undefined,
-            channelId: message.channelId
-        });
-
-        log.debug('Alias matching result', {
-            component: 'proxy',
-            userId: message.author.id,
-            contentLength: message.content.length,
-            matchFound: !!match,
-            aliasId: match?.alias.id,
-            renderedTextLength: match?.renderedText.length,
-            status: match ? 'match_found' : 'no_match'
-        });
-
-        if (!match) {
-            log.debug('No alias match found, skipping proxy', {
+        // Parallelize independent fetches: match, form, member, attachments
+        const parallelStart = performance.now();
+        const matchPromise = handleDegradedModeError(
+            () => matchAlias(message.author.id, message.content),
+            {
                 component: 'proxy',
                 userId: message.author.id,
-                status: 'skipped_no_match'
-            });
-            return;
-        }
+                guildId: message.guildId || undefined,
+                channelId: message.channelId,
+                status: 'degraded_mode_fallback'
+            },
+            null,
+            'Failed to match alias'
+        ).then(match => ({ type: 'match', value: match }));
 
-        // Parallelize independent fetches: form, member, attachments
-        const parallelStart = performance.now();
+        const formPromise = matchPromise.then(result => {
+            const match = result.value;
+            if (match) {
+                return handleDegradedModeError(
+                    () => formRepo.getById(match.alias.formId),
+                    {
+                        component: 'proxy',
+                        userId: message.author.id,
+                        guildId: message.guildId || undefined,
+                        channelId: message.channelId,
+                        status: 'degraded_mode_fallback'
+                    },
+                    null,
+                    'Failed to fetch form'
+                ).then(form => ({ type: 'form', value: form }));
+            } else {
+                return Promise.resolve({ type: 'form', value: null });
+            }
+        });
+
         const promises: Promise<{ type: string; value: any }>[] = [
-            handleDegradedModeError(
-                () => formRepo.getById(match.alias.formId),
-                {
-                    component: 'proxy',
-                    userId: message.author.id,
-                    guildId: message.guildId || undefined,
-                    channelId: message.channelId,
-                    status: 'degraded_mode_fallback'
-                },
-                null,
-                'Failed to fetch form'
-            ).then(form => ({ type: 'form', value: form })),
+            matchPromise,
+            formPromise,
             handleDegradedModeError(
                 () => message.guild!.members.fetch(message.author.id),
                 {
@@ -165,16 +156,49 @@ export async function messageCreateProxy(message: Message) {
         });
 
         // Extract results
+        let match = null;
         let form = null;
         let member = null;
         let standardizedAttachments: any[] = [];
         for (const result of results) {
             if (result.status === 'fulfilled') {
                 const { type, value } = result.value;
-                if (type === 'form') form = value;
+                if (type === 'match') match = value;
+                else if (type === 'form') form = value;
                 else if (type === 'member') member = value;
                 else if (type === 'attachments') standardizedAttachments = value;
             }
+        }
+
+        if (match) {
+            const aliasMatchDuration = performance.now() - proxyStart;
+            log.debug('Proxy stage complete', {
+                stage: 'aliasMatch',
+                durationMs: aliasMatchDuration,
+                component: 'proxy',
+                userId: message.author.id,
+                guildId: message.guildId || undefined,
+                channelId: message.channelId
+            });
+
+            log.debug('Alias matching result', {
+                component: 'proxy',
+                userId: message.author.id,
+                contentLength: message.content.length,
+                matchFound: !!match,
+                aliasId: match?.alias.id,
+                renderedTextLength: match?.renderedText.length,
+                status: match ? 'match_found' : 'no_match'
+            });
+        }
+
+        if (!match) {
+            log.debug('No alias match found, skipping proxy', {
+                component: 'proxy',
+                userId: message.author.id,
+                status: 'skipped_no_match'
+            });
+            return;
         }
 
         if (!form) {

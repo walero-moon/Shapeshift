@@ -136,7 +136,7 @@ describe('messageCreateProxy function', () => {
 
         expect(matchAlias).toHaveBeenCalledWith('user123', 'n:text hello world');
         expect(formRepo.getById).toHaveBeenCalledWith('form1');
-        expect(validateUserChannelPerms).toHaveBeenCalledWith('user123', expect.any(Object), []);
+        expect(validateUserChannelPerms).toHaveBeenCalledWith('user123', expect.any(Object), [], expect.any(Object));
     });
 
     it('should skip proxying if user lacks permissions', async () => {
