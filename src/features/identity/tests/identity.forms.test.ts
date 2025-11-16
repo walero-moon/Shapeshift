@@ -22,6 +22,7 @@ vi.mock('../infra/AliasRepo', () => ({
         create: vi.fn(),
         getByForm: vi.fn(),
         getByUser: vi.fn(),
+        listByUserGrouped: vi.fn(),
         delete: vi.fn(),
         findCollision: vi.fn(),
     },
@@ -589,9 +590,10 @@ describe('listForms function', () => {
         ];
 
         vi.mocked(formRepo.getByUser).mockResolvedValue(mockForms);
-        vi.mocked(aliasRepo.getByForm)
-            .mockResolvedValueOnce(mockAliases1)
-            .mockResolvedValueOnce(mockAliases2);
+        vi.mocked(aliasRepo.listByUserGrouped).mockResolvedValue({
+            'form1': mockAliases1,
+            'form2': mockAliases2,
+        });
 
         const result = await listForms('user1');
 
@@ -629,7 +631,7 @@ describe('listForms function', () => {
         ]);
 
         expect(formRepo.getByUser).toHaveBeenCalledWith('user1');
-        expect(aliasRepo.getByForm).toHaveBeenCalledTimes(2);
+        expect(aliasRepo.listByUserGrouped).toHaveBeenCalledWith('user1');
     });
 
     it('should return empty array when user has no forms', async () => {
@@ -661,7 +663,7 @@ describe('listForms function', () => {
         ];
 
         vi.mocked(formRepo.getByUser).mockResolvedValue(mockForms);
-        vi.mocked(aliasRepo.getByForm).mockRejectedValue(new Error('Alias query failed'));
+        vi.mocked(aliasRepo.listByUserGrouped).mockRejectedValue(new Error('Alias query failed'));
 
         const result = await listForms('user1');
 

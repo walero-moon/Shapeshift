@@ -1,4 +1,5 @@
 import { Message, TextChannel } from 'discord.js';
+import { performance } from 'node:perf_hooks';
 import { matchAlias } from '../../../features/proxy/app/MatchAlias';
 import { validateUserChannelPerms } from '../../../features/proxy/app/ValidateUserChannelPerms';
 import { proxyCoordinator } from '../../../features/proxy/app/ProxyCoordinator';
@@ -59,21 +60,31 @@ export async function messageCreateProxy(message: Message) {
         userId: message.author.id,
         guildId: message.guildId || undefined,
         channelId: message.channelId,
-        content: message.content,
+        contentLength: message.content.length,
         status: 'processing'
     });
 
     try {
         // Check if message matches any alias for the user
+        const aliasMatchStart = performance.now();
         const match = await matchAlias(message.author.id, message.content);
+        const aliasMatchDuration = performance.now() - aliasMatchStart;
+        log.debug('Proxy stage complete', {
+            stage: 'aliasMatch',
+            durationMs: aliasMatchDuration,
+            component: 'proxy',
+            userId: message.author.id,
+            guildId: message.guildId || undefined,
+            channelId: message.channelId
+        });
 
         log.debug('Alias matching result', {
             component: 'proxy',
             userId: message.author.id,
-            content: message.content,
+            contentLength: message.content.length,
             matchFound: !!match,
             aliasId: match?.alias.id,
-            renderedText: match?.renderedText,
+            renderedTextLength: match?.renderedText.length,
             status: match ? 'match_found' : 'no_match'
         });
 
@@ -87,7 +98,17 @@ export async function messageCreateProxy(message: Message) {
         }
 
         // Get the form associated with the matched alias
+        const formFetchStart = performance.now();
         const form = await formRepo.getById(match.alias.formId);
+        const formFetchDuration = performance.now() - formFetchStart;
+        log.debug('Proxy stage complete', {
+            stage: 'formFetch',
+            durationMs: formFetchDuration,
+            component: 'proxy',
+            userId: message.author.id,
+            guildId: message.guildId || undefined,
+            channelId: message.channelId
+        });
 
         if (!form) {
             log.warn('Form not found for alias', {
@@ -104,11 +125,21 @@ export async function messageCreateProxy(message: Message) {
         const discordAttachments = Array.from(message.attachments.values());
 
         // Validate user permissions in the channel
+        const memberFetchStart = performance.now();
         const hasPerms = await validateUserChannelPerms(
             message.author.id,
             message.channel as TextChannel,
             discordAttachments
         );
+        const memberFetchDuration = performance.now() - memberFetchStart;
+        log.debug('Proxy stage complete', {
+            stage: 'memberFetch',
+            durationMs: memberFetchDuration,
+            component: 'proxy',
+            userId: message.author.id,
+            guildId: message.guildId || undefined,
+            channelId: message.channelId
+        });
 
         log.debug('Permission check result', {
             component: 'proxy',
@@ -130,6 +161,7 @@ export async function messageCreateProxy(message: Message) {
         }
 
         // Reupload Discord attachments to standardized format
+        const attachmentsStart = performance.now();
         const standardizedAttachments = await reuploadAttachments(
             discordAttachments.map(attachment => ({
                 name: attachment.name,
@@ -137,11 +169,21 @@ export async function messageCreateProxy(message: Message) {
                 id: attachment.id
             }))
         );
+        const attachmentsDuration = performance.now() - attachmentsStart;
+        log.debug('Proxy stage complete', {
+            stage: 'attachments',
+            durationMs: attachmentsDuration,
+            component: 'proxy',
+            userId: message.author.id,
+            guildId: message.guildId || undefined,
+            channelId: message.channelId
+        });
 
         // Create channel proxy instance
         const channelProxy = new DiscordChannelProxy(message.channelId);
 
         // Check for reply context
+        const replyFetchStart = performance.now();
         let replyTo: { guildId: string; channelId: string; messageId: string } | undefined;
         if (message.reference && message.reference.guildId && message.reference.channelId && message.reference.messageId) {
             replyTo = {
@@ -162,8 +204,18 @@ export async function messageCreateProxy(message: Message) {
                 status: 'no_reply_context'
             });
         }
+        const replyFetchDuration = performance.now() - replyFetchStart;
+        log.debug('Proxy stage complete', {
+            stage: 'replyFetch',
+            durationMs: replyFetchDuration,
+            component: 'proxy',
+            userId: message.author.id,
+            guildId: message.guildId || undefined,
+            channelId: message.channelId
+        });
 
         // Proxy the message via coordinator with standardized attachments
+        const proxySendStart = performance.now();
         await proxyCoordinator(
             message.author.id,
             form.id,
@@ -174,6 +226,15 @@ export async function messageCreateProxy(message: Message) {
             standardizedAttachments,
             replyTo
         );
+        const proxySendDuration = performance.now() - proxySendStart;
+        log.debug('Proxy stage complete', {
+            stage: 'proxySend',
+            durationMs: proxySendDuration,
+            component: 'proxy',
+            userId: message.author.id,
+            guildId: message.guildId || undefined,
+            channelId: message.channelId
+        });
 
         log.info('Message proxied successfully via tag', {
             component: 'proxy',
@@ -186,9 +247,19 @@ export async function messageCreateProxy(message: Message) {
         });
 
         // Delete the original user message after successful proxying
+        const deleteStart = performance.now();
         await handleDegradedModeError(
             async () => {
                 await message.delete();
+                const deleteDuration = performance.now() - deleteStart;
+                log.debug('Proxy stage complete', {
+                    stage: 'delete',
+                    durationMs: deleteDuration,
+                    component: 'proxy',
+                    userId: message.author.id,
+                    guildId: message.guildId || undefined,
+                    channelId: message.channelId
+                });
                 log.debug('Original message deleted after successful proxy', {
                     component: 'proxy',
                     userId: message.author.id,

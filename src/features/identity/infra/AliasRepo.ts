@@ -24,7 +24,8 @@ export interface AliasRepo {
   create(userId: string, formId: string, data: CreateAliasData): Promise<Alias>;
   getByForm(formId: string): Promise<Alias[]>;
   getByUser(userId: string): Promise<Alias[]>;
-  getById(id: string, userId: string): Promise<Alias | null>;
+  getById(id: string, userId?: string): Promise<Alias | null>;
+  listByUserGrouped(userId: string): Promise<Record<string, Alias[]>>;
   delete(aliasId: string): Promise<void>;
   findCollision(userId: string, triggerNorm: string): Promise<Alias | null>;
 }
@@ -99,17 +100,35 @@ export class DrizzleAliasRepo implements AliasRepo {
     }
   }
 
-  async getById(id: string, userId: string): Promise<Alias | null> {
+  async getById(id: string, userId?: string): Promise<Alias | null> {
     try {
-      const result = await db.select()
-        .from(aliases)
-        .where(and(
-          eq(aliases.id, id),
-          eq(aliases.userId, userId)
-        ));
+      let whereCondition = eq(aliases.id, id);
+      if (userId) {
+        whereCondition = and(whereCondition, eq(aliases.userId, userId))!;
+      }
+      const result = await db.select().from(aliases).where(whereCondition);
       return result[0] || null;
     } catch (error) {
-      log.error('Failed to get alias by id', { component: 'identity', userId, aliasId: id, status: 'database_error', error });
+      const logContext: any = { component: 'identity', aliasId: id, status: 'database_error', error };
+      if (userId) logContext.userId = userId;
+      log.error('Failed to get alias by id', logContext);
+      throw error;
+    }
+  }
+
+  async listByUserGrouped(userId: string): Promise<Record<string, Alias[]>> {
+    try {
+      const result = await db.select().from(aliases).where(eq(aliases.userId, userId));
+      const grouped: Record<string, Alias[]> = {};
+      for (const alias of result) {
+        if (!grouped[alias.formId]) {
+          grouped[alias.formId] = [];
+        }
+        grouped[alias.formId]!.push(alias);
+      }
+      return grouped;
+    } catch (error) {
+      log.error('Failed to list aliases by user grouped', { component: 'identity', userId, status: 'database_error', error });
       throw error;
     }
   }

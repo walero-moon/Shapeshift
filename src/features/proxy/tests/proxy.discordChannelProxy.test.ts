@@ -107,8 +107,8 @@ describe('DiscordChannelProxy', () => {
                     username: 'TestUser',
                     avatar_url: 'https://example.com/avatar.png',
                     allowed_mentions: { parse: [] },
-                    files: [],
                 },
+                files: [],
             });
         });
 
@@ -263,8 +263,8 @@ describe('DiscordChannelProxy', () => {
                 body: {
                     content: 'Updated content',
                     allowed_mentions: { parse: [], repliedUser: false },
-                    files: [],
                 },
+                files: [],
             });
         });
 

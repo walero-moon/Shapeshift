@@ -5,7 +5,7 @@ import { aliasRepo } from '../../identity/infra/AliasRepo';
 // Mock the alias repository
 vi.mock('../../identity/infra/AliasRepo', () => ({
     aliasRepo: {
-        getByUser: vi.fn(),
+        listByUserGrouped: vi.fn(),
     },
 }));
 
@@ -15,12 +15,12 @@ describe('matchAlias function', () => {
     });
 
     it('should return null when no aliases exist for user', async () => {
-        vi.mocked(aliasRepo.getByUser).mockResolvedValue([]);
+        vi.mocked(aliasRepo.listByUserGrouped).mockResolvedValue({});
 
         const result = await matchAlias('user1', 'n:text hello world');
 
         expect(result).toBeNull();
-        expect(aliasRepo.getByUser).toHaveBeenCalledWith('user1');
+        expect(aliasRepo.listByUserGrouped).toHaveBeenCalledWith('user1');
     });
 
     it('should return null when no prefix aliases exist and pattern does not match', async () => {
@@ -35,11 +35,12 @@ describe('matchAlias function', () => {
                 createdAt: new Date(),
             },
         ];
-        vi.mocked(aliasRepo.getByUser).mockResolvedValue(mockAliases);
+        vi.mocked(aliasRepo.listByUserGrouped).mockResolvedValue({ 'form1': mockAliases });
 
         const result = await matchAlias('user1', 'n:text hello world');
 
         expect(result).toBeNull();
+        expect(aliasRepo.listByUserGrouped).toHaveBeenCalledWith('user1');
     });
 
     it('should return null when no alias matches the text', async () => {
@@ -54,11 +55,12 @@ describe('matchAlias function', () => {
                 createdAt: new Date(),
             },
         ];
-        vi.mocked(aliasRepo.getByUser).mockResolvedValue(mockAliases);
+        vi.mocked(aliasRepo.listByUserGrouped).mockResolvedValue({ 'form1': mockAliases });
 
         const result = await matchAlias('user1', 'hello world');
 
         expect(result).toBeNull();
+        expect(aliasRepo.listByUserGrouped).toHaveBeenCalledWith('user1');
     });
 
     it('should match the longest prefix alias', async () => {

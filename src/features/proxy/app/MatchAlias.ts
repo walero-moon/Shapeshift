@@ -20,8 +20,9 @@ export interface MatchResult {
  */
 export async function matchAlias(userId: string, text: string): Promise<MatchResult | null> {
     try {
-        // Get all aliases for the user
-        const aliases = await aliasRepo.getByUser(userId);
+        // Get all aliases for the user grouped by form
+        const groupedAliases = await aliasRepo.listByUserGrouped(userId);
+        const aliases = Object.values(groupedAliases).flat();
 
         // Separate prefix and pattern aliases
         const prefixAliases = aliases.filter(alias => alias.kind === 'prefix');

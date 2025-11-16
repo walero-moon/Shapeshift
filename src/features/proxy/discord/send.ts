@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, Message, MessageFlags } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, Message, MessageFlags, ChannelType, TextChannel } from 'discord.js';
 import { formRepo } from '../../identity/infra/FormRepo';
 import { proxyCoordinator } from '../app/ProxyCoordinator';
 import { validateUserChannelPerms } from '../app/ValidateUserChannelPerms';
@@ -109,7 +109,7 @@ export const command = {
             }
 
             // Validate permissions (only for guild channels)
-            if (!interaction.guild || !interaction.channel || !interaction.channel.isTextBased() || interaction.channel.type === 1) { // DMChannel
+            if (!interaction.guild || !interaction.channel || !interaction.channel.isTextBased() || interaction.channel.type === ChannelType.DM) {
                 return interaction.editReply({
                     content: 'This command can only be used in server channels.',
                     allowedMentions: DEFAULT_ALLOWED_MENTIONS
@@ -118,7 +118,7 @@ export const command = {
 
             const hasPerms = await validateUserChannelPerms(
                 interaction.user.id,
-                interaction.channel as any, // Cast to TextChannel
+                interaction.channel as TextChannel,
                 [] // attachments will be collected below
             );
             if (!hasPerms) {
@@ -140,7 +140,7 @@ export const command = {
             // Re-validate permissions with Discord attachments
             const hasPermsWithAttachments = await validateUserChannelPerms(
                 interaction.user.id,
-                interaction.channel as any, // Cast to TextChannel
+                interaction.channel as TextChannel,
                 discordAttachments
             );
             if (!hasPermsWithAttachments) {
