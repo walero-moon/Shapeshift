@@ -6,6 +6,7 @@ import { ChannelProxyPort, ProxyAttachment } from '../../../shared/ports/Channel
 // Mock dependencies
 vi.mock('../../../features/proxy/app/MatchAlias', () => ({
     matchAlias: vi.fn(),
+    clearAliasCache: vi.fn(),
 }));
 
 vi.mock('../../../features/proxy/app/ValidateUserChannelPerms', () => ({
@@ -44,7 +45,7 @@ vi.mock('../../../shared/utils/errorHandling', () => ({
 }));
 
 // Import after mocking
-import { matchAlias } from '../../../features/proxy/app/MatchAlias';
+import { matchAlias, clearAliasCache } from '../../../features/proxy/app/MatchAlias';
 import { validateUserChannelPerms } from '../../../features/proxy/app/ValidateUserChannelPerms';
 import { proxyCoordinator } from '../../../features/proxy/app/ProxyCoordinator';
 import { formRepo } from '../../../features/identity/infra/FormRepo';
@@ -58,6 +59,7 @@ describe('messageCreateProxy function', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        clearAliasCache();
 
         mockMessage = {
             author: { bot: false, id: 'user123' },

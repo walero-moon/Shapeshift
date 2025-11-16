@@ -2,6 +2,7 @@ import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, MessageFlag
 import { addAlias } from '../app/AddAlias';
 import { DEFAULT_ALLOWED_MENTIONS } from '../../../shared/utils/allowedMentions';
 import { handleInteractionError } from '../../../shared/utils/errorHandling';
+import { invalidateAliasCache } from '../../proxy/app/MatchAlias';
 
 export const data = new SlashCommandSubcommandBuilder()
     .setName('add')
@@ -24,6 +25,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
     try {
         const result = await addAlias(formId, interaction.user.id, { trigger });
+
+        // Invalidate cache after successful alias addition
+        invalidateAliasCache(interaction.user.id);
 
         return await interaction.editReply({
             content: `✅ Alias "${result.triggerRaw}" added successfully!`,

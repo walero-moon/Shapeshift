@@ -2,12 +2,34 @@ import { aliasRepo, type Alias } from '../../identity/infra/AliasRepo';
 import { log } from '../../../shared/utils/logger';
 
 /**
+ * In-memory TTL cache for alias lists per userId
+ */
+const aliasCache = new Map<string, { aliases: Alias[], expiresAt: number }>();
+const TTL = 300000; // 5 minutes in milliseconds
+
+/**
  * Result of matching an alias to user input text
  */
 export interface MatchResult {
     alias: Alias;
     renderedText: string;
 }
+
+/**
+ * Invalidate the alias cache for a specific user
+ * @param userId The Discord user ID
+ */
+export function invalidateAliasCache(userId: string): void {
+    aliasCache.delete(userId);
+}
+
+/**
+ * Clear the entire alias cache (for testing)
+ */
+export function clearAliasCache(): void {
+    aliasCache.clear();
+}
+
 
 /**
  * Match user input text against the user's aliases using longest-prefix wins for prefixes and exact pattern matching for patterns
@@ -20,9 +42,28 @@ export interface MatchResult {
  */
 export async function matchAlias(userId: string, text: string): Promise<MatchResult | null> {
     try {
-        // Get all aliases for the user grouped by form
-        const groupedAliases = await aliasRepo.listByUserGrouped(userId);
-        const aliases = Object.values(groupedAliases).flat();
+        // Check cache first
+        const cached = aliasCache.get(userId);
+        let aliases: Alias[];
+
+        if (cached && cached.expiresAt > Date.now()) {
+            aliases = cached.aliases;
+            log.info('Cache hit for alias list', {
+                component: 'proxy',
+                userId,
+                status: 'cache_hit'
+            });
+        } else {
+            // Cache miss or expired, fetch from DB
+            const groupedAliases = await aliasRepo.listByUserGrouped(userId);
+            aliases = Object.values(groupedAliases).flat();
+            aliasCache.set(userId, { aliases, expiresAt: Date.now() + TTL });
+            log.info('Cache miss for alias list', {
+                component: 'proxy',
+                userId,
+                status: 'cache_miss'
+            });
+        }
 
         // Separate prefix and pattern aliases
         const prefixAliases = aliases.filter(alias => alias.kind === 'prefix');
