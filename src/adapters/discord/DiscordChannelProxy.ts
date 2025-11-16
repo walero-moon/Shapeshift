@@ -90,8 +90,17 @@ export class DiscordChannelProxy implements ChannelProxyPort {
             // Convert ProxyAttachment[] to Discord webhook file format
             const webhookFiles = data.attachments?.map((attachment: ProxyAttachment) => ({
                 name: attachment.name,
-                data: attachment.data
+                data: attachment.data as any
             })) || [];
+
+            if (data.attachments?.length) {
+                log.debug('Preparing webhook files', {
+                    ...context,
+                    attachmentCount: data.attachments.length,
+                    attachmentTypes: ['Buffer'],
+                    status: 'webhook_files_prepared'
+                });
+            }
 
             // Execute webhook with message data
             const result = await this.executeWithRetry(() =>
@@ -134,7 +143,7 @@ export class DiscordChannelProxy implements ChannelProxyPort {
             // Convert ProxyAttachment[] to Discord webhook file format
             const webhookFiles = data.attachments?.map((attachment: ProxyAttachment) => ({
                 name: attachment.name,
-                data: attachment.data
+                data: attachment.data as any
             })) || [];
 
             await this.executeWithRetry(() =>

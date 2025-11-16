@@ -219,7 +219,7 @@ describe('messageCreateProxy function', () => {
         vi.mocked(matchAlias).mockResolvedValue(mockMatch);
         vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
         vi.mocked(validateUserChannelPerms).mockResolvedValue(true);
-        vi.mocked(reuploadAttachments).mockResolvedValue(mockReuploadedAttachments);
+        vi.mocked(reuploadAttachments).mockResolvedValue(mockReuploadedAttachments as any);
         vi.mocked(proxyCoordinator).mockResolvedValue({
             webhookId: 'webhook123',
             token: 'token456',

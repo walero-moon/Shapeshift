@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { Readable } from 'stream';
 import { DiscordChannelProxy } from '../../../adapters/discord/DiscordChannelProxy';
 import { MessageMentionOptions } from 'discord.js';
 
@@ -247,6 +248,47 @@ describe('DiscordChannelProxy', () => {
                 expect(payload.components).toEqual([]); // No jump button
             }
         });
+
+        it('should send message with attachments including readable streams', async () => {
+            const mockMessageResponse = { id: 'msg123' };
+            vi.mocked(client.rest.post).mockResolvedValue(mockMessageResponse);
+
+            const mockReadable = new Readable();
+            mockReadable.push('file content');
+            mockReadable.push(null); // End the stream
+
+            const result = await proxy.send({
+                username: 'TestUser',
+                content: 'Hello world',
+                avatarUrl: 'https://example.com/avatar.png',
+                allowedMentions: { parse: [], repliedUser: false },
+                attachments: [
+                    { name: 'file1.txt', data: Buffer.from('buffer content') },
+                    { name: 'file2.txt', data: mockReadable }
+                ],
+            });
+
+            expect(result).toEqual({
+                webhookId: 'webhook456',
+                webhookToken: 'token789',
+                messageId: 'msg123',
+            });
+
+            expect(client.rest.post).toHaveBeenCalledWith('/webhooks/webhook456/token789?wait=true', {
+                body: {
+                    content: 'Hello world',
+                    components: [],
+                    allowedMentions: { parse: [] },
+                    username: 'TestUser',
+                    avatar_url: 'https://example.com/avatar.png',
+                    allowed_mentions: { parse: [] },
+                },
+                files: [
+                    { name: 'file1.txt', data: Buffer.from('buffer content') },
+                    { name: 'file2.txt', data: mockReadable }
+                ],
+            });
+        });
     });
 
     describe('edit method', () => {
@@ -304,6 +346,34 @@ describe('DiscordChannelProxy', () => {
 
             expect(setTimeout).toHaveBeenCalledWith(500);
             expect(client.rest.patch).toHaveBeenCalledTimes(2);
+        });
+
+        it('should edit message with attachments including readable streams', async () => {
+            vi.mocked(client.rest.patch).mockResolvedValue(undefined);
+
+            const mockReadable = new Readable();
+            mockReadable.push('updated file content');
+            mockReadable.push(null); // End the stream
+
+            await proxy.edit('webhook456', 'token789', 'msg123', {
+                content: 'Updated content',
+                allowedMentions: { parse: [], repliedUser: false },
+                attachments: [
+                    { name: 'file1.txt', data: Buffer.from('updated buffer content') },
+                    { name: 'file2.txt', data: mockReadable }
+                ],
+            });
+
+            expect(client.rest.patch).toHaveBeenCalledWith('/webhooks/webhook456/token789/messages/msg123', {
+                body: {
+                    content: 'Updated content',
+                    allowed_mentions: { parse: [], repliedUser: false },
+                },
+                files: [
+                    { name: 'file1.txt', data: Buffer.from('updated buffer content') },
+                    { name: 'file2.txt', data: mockReadable }
+                ],
+            });
         });
     });
 

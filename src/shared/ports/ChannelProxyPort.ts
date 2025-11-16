@@ -1,7 +1,9 @@
+import type { Readable } from 'stream';
+
 // Discord-agnostic attachment format
 export interface ProxyAttachment {
     name: string;
-    data: Buffer;
+    data: Buffer | Readable;
 }
 
 export interface AllowedMentions {
