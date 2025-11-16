@@ -1,13 +1,14 @@
-import { TextChannel, Attachment, PermissionsBitField } from 'discord.js';
+import { TextChannel, Attachment, PermissionsBitField, GuildMember } from 'discord.js';
 
 export async function validateUserChannelPerms(
     userId: string,
     channel: TextChannel,
-    attachments?: Attachment[]
+    attachments?: Attachment[],
+    member?: GuildMember
 ): Promise<boolean> {
     try {
-        const member = await channel.guild.members.fetch(userId);
-        const perms = member.permissionsIn(channel);
+        const resolvedMember = member || await channel.guild.members.fetch(userId);
+        const perms = resolvedMember.permissionsIn(channel);
 
         if (!perms.has(PermissionsBitField.Flags.ViewChannel)) return false;
         if (!perms.has(PermissionsBitField.Flags.SendMessages)) return false;
@@ -16,7 +17,7 @@ export async function validateUserChannelPerms(
 
         return true;
     } catch {
-      // If unable to fetch member or any error, assume insufficient permissions
-      return false;
+        // If unable to fetch member or any error, assume insufficient permissions
+        return false;
     }
 }

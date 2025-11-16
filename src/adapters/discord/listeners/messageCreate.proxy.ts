@@ -97,6 +97,19 @@ export async function messageCreateProxy(message: Message) {
             return;
         }
 
+        // Fetch the guild member once for permission checks
+        const memberFetchStart = performance.now();
+        const member = await message.guild!.members.fetch(message.author.id);
+        const memberFetchDuration = performance.now() - memberFetchStart;
+        log.debug('Proxy stage complete', {
+            stage: 'memberFetch',
+            durationMs: memberFetchDuration,
+            component: 'proxy',
+            userId: message.author.id,
+            guildId: message.guildId || undefined,
+            channelId: message.channelId
+        });
+
         // Get the form associated with the matched alias
         const formFetchStart = performance.now();
         const form = await formRepo.getById(match.alias.formId);
@@ -125,16 +138,17 @@ export async function messageCreateProxy(message: Message) {
         const discordAttachments = Array.from(message.attachments.values());
 
         // Validate user permissions in the channel
-        const memberFetchStart = performance.now();
+        const permsStart = performance.now();
         const hasPerms = await validateUserChannelPerms(
             message.author.id,
             message.channel as TextChannel,
-            discordAttachments
+            discordAttachments,
+            member
         );
-        const memberFetchDuration = performance.now() - memberFetchStart;
+        const permsDuration = performance.now() - permsStart;
         log.debug('Proxy stage complete', {
-            stage: 'memberFetch',
-            durationMs: memberFetchDuration,
+            stage: 'permsCheck',
+            durationMs: permsDuration,
             component: 'proxy',
             userId: message.author.id,
             guildId: message.guildId || undefined,

@@ -124,4 +124,28 @@ describe('validateUserChannelPerms function', () => {
 
         expect(result).toBe(false);
     });
+
+    it('should use provided member and not call fetch', async () => {
+        mockMember.permissionsIn.mockReturnValue({
+            has: vi.fn().mockReturnValue(true),
+        } as any);
+
+        const result = await validateUserChannelPerms('user1', mockChannel, undefined, mockMember);
+
+        expect(result).toBe(true);
+        expect(mockGuild.members.fetch).not.toHaveBeenCalled();
+        expect(mockMember.permissionsIn).toHaveBeenCalledWith(mockChannel);
+    });
+
+    it('should fall back to fetch when member is not provided', async () => {
+        mockMember.permissionsIn.mockReturnValue({
+            has: vi.fn().mockReturnValue(true),
+        } as any);
+
+        const result = await validateUserChannelPerms('user1', mockChannel);
+
+        expect(result).toBe(true);
+        expect(mockGuild.members.fetch).toHaveBeenCalledWith('user1');
+        expect(mockMember.permissionsIn).toHaveBeenCalledWith(mockChannel);
+    });
 });
