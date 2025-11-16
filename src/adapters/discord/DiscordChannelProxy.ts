@@ -1,5 +1,6 @@
 import { Routes } from 'discord-api-types/v10';
 import { setTimeout } from 'timers/promises';
+import type { Message } from 'discord.js';
 import { client } from './client';
 import { ChannelProxyPort, SendMessageData, EditMessageData, ProxyAttachment } from '../../shared/ports/ChannelProxyPort';
 import { handleWebhookError, handleDegradedModeError } from '../../shared/utils/errorHandling';
@@ -16,7 +17,19 @@ export class DiscordChannelProxy implements ChannelProxyPort {
         this.channelId = channelId;
     }
 
-    async send(data: SendMessageData, replyTo?: { guildId: string; channelId: string; messageId: string } | null): Promise<{ webhookId: string; webhookToken: string; messageId: string }> {
+    async send(
+        data: SendMessageData,
+        replyTo?: {
+            guildId: string;
+            channelId: string;
+            messageId: string
+        }
+            | null,
+        _replyMessage?: Message | null): Promise<{
+            webhookId: string;
+            webhookToken: string;
+            messageId: string
+        }> {
         const context: LogContext = {
             component: 'DiscordChannelProxy',
             channelId: this.channelId,
