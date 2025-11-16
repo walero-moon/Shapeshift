@@ -45,6 +45,9 @@ export async function editForm(formId: string, userId: string, input: EditFormIn
 
         const updatedForm = await formRepo.updateNameAvatar(formId, input);
 
+        // Invalidate cache for this form
+        formRepo.invalidateCache(userId, formId);
+
         return {
             id: updatedForm.id,
             name: updatedForm.name,

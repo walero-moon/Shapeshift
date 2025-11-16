@@ -4,10 +4,12 @@ import { ChannelProxyPort, SendMessageData, ProxyAttachment } from '../../../sha
 import { proxiedMessageRepo } from '../infra/ProxiedMessageRepo';
 import { generateUuidv7OrUndefined } from '../../../shared/db/uuidDetection';
 import { log } from '../../../shared/utils/logger';
+import { handleDegradedModeError } from '../../../shared/utils/errorHandling';
+import { Message } from 'discord.js';
 
 /**
- * Orchestrates the proxying process: fetch form, build payload, send via port, persist proxied message.
- * Assumes permissions are validated externally. Throws on send failure or database errors.
+ * Orchestrates the proxying process: fetch form, build payload, send via port, persist proxied message asynchronously.
+ * Assumes permissions are validated externally. Throws on send failure. Database persistence is fire-and-forget.
  * Discord-agnostic use-case.
  */
 export async function proxyCoordinator(
@@ -19,7 +21,8 @@ export async function proxyCoordinator(
     channelProxy: ChannelProxyPort,
     attachments?: ProxyAttachment[], // Reuploaded attachments in standardized format
     _replyTo?: { guildId: string; channelId: string; messageId: string },
-    form?: Form
+    form?: Form,
+    _replyMessage?: Message
 ): Promise<{ webhookId: string; token: string; messageId: string }> {
     try {
         log.info('Starting proxy coordination', {
@@ -78,21 +81,6 @@ export async function proxyCoordinator(
 
         const sendResult = await channelProxy.send(sendData, _replyTo);
 
-        // Persist proxied message
-        const proxiedMessageId = await generateUuidv7OrUndefined();
-        await proxiedMessageRepo.insert({
-            // Only include id field when we have a valid UUID (PostgreSQL <18)
-            // Let DB handle ID generation when function returns undefined (PostgreSQL 18+)
-            ...(proxiedMessageId !== undefined && { id: proxiedMessageId }),
-            userId,
-            formId,
-            guildId,
-            channelId,
-            webhookId: sendResult.webhookId,
-            webhookToken: sendResult.webhookToken,
-            messageId: sendResult.messageId
-        });
-
         log.info('Proxy coordination successful', {
             component: 'proxy',
             userId,
@@ -102,6 +90,45 @@ export async function proxyCoordinator(
             messageId: sendResult.messageId,
             status: 'proxy_success'
         });
+
+        // Persist proxied message asynchronously (fire-and-forget)
+        handleDegradedModeError(
+            async () => {
+                const proxiedMessageId = await generateUuidv7OrUndefined();
+                await proxiedMessageRepo.insert({
+                    // Only include id field when we have a valid UUID (PostgreSQL <18)
+                    // Let DB handle ID generation when function returns undefined (PostgreSQL 18+)
+                    ...(proxiedMessageId !== undefined && { id: proxiedMessageId }),
+                    userId,
+                    formId,
+                    guildId,
+                    channelId,
+                    webhookId: sendResult.webhookId,
+                    webhookToken: sendResult.webhookToken,
+                    messageId: sendResult.messageId
+                });
+
+                log.info('Proxied message persisted', {
+                    component: 'proxy',
+                    userId,
+                    formId,
+                    guildId,
+                    channelId,
+                    messageId: sendResult.messageId,
+                    status: 'persistence_success'
+                });
+            },
+            {
+                component: 'proxy',
+                userId,
+                formId,
+                guildId,
+                channelId,
+                messageId: sendResult.messageId
+            },
+            undefined, // fallback, since void
+            'proxied_message_insert'
+        );
 
         return {
             webhookId: sendResult.webhookId,

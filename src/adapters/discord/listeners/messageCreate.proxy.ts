@@ -5,9 +5,10 @@ import { validateUserChannelPerms } from '../../../features/proxy/app/ValidateUs
 import { proxyCoordinator } from '../../../features/proxy/app/ProxyCoordinator';
 import { formRepo } from '../../../features/identity/infra/FormRepo';
 import { DiscordChannelProxy } from '../DiscordChannelProxy';
+import { client } from '../client';
 import { log } from '../../../shared/utils/logger';
 import { handleDegradedModeError } from '../../../shared/utils/errorHandling';
-import { reuploadAttachments } from '../../../shared/utils/attachments';
+import { reuploadAttachments, splitAttachmentsBySize } from '../../../shared/utils/attachments';
 
 /**
  * Message create listener for tag-based proxying
@@ -55,6 +56,21 @@ export async function messageCreateProxy(message: Message) {
         return;
     }
 
+    // Early bail-out: skip if content is too short for alias prefixes or lacks colon/brace markers
+    if (message.content.length < 6 || (!message.content.includes(':') && !message.content.includes('{'))) {
+        log.debug('Early bail-out: message too short or lacks alias markers', {
+            component: 'proxy',
+            userId: message.author.id,
+            guildId: message.guildId || undefined,
+            channelId: message.channelId,
+            contentLength: message.content.length,
+            hasColon: message.content.includes(':'),
+            hasBrace: message.content.includes('{'),
+            status: 'early_bailout'
+        });
+        return;
+    }
+
     log.debug('Processing guild message for proxying', {
         component: 'proxy',
         userId: message.author.id,
@@ -66,44 +82,60 @@ export async function messageCreateProxy(message: Message) {
 
     const proxyStart = performance.now();
     try {
-        // Parallelize independent fetches: match, form, member, attachments
+        // Parallelize independent fetches: match, form, member, attachments, reply
         const parallelStart = performance.now();
-        const matchPromise = handleDegradedModeError(
-            () => matchAlias(message.author.id, message.content),
-            {
-                component: 'proxy',
-                userId: message.author.id,
-                guildId: message.guildId || undefined,
-                channelId: message.channelId,
-                status: 'degraded_mode_fallback'
-            },
-            null,
-            'Failed to match alias'
-        ).then(match => ({ type: 'match', value: match }));
+        const promises: Promise<{ type: string; value: any }>[] = [];
 
-        const formPromise = matchPromise.then(result => {
-            const match = result.value;
-            if (match) {
-                return handleDegradedModeError(
-                    () => formRepo.getById(match.alias.formId),
-                    {
-                        component: 'proxy',
-                        userId: message.author.id,
-                        guildId: message.guildId || undefined,
-                        channelId: message.channelId,
-                        status: 'degraded_mode_fallback'
-                    },
-                    null,
-                    'Failed to fetch form'
-                ).then(form => ({ type: 'form', value: form }));
-            } else {
-                return Promise.resolve({ type: 'form', value: null });
-            }
-        });
+        // Match alias
+        promises.push(
+            handleDegradedModeError(
+                () => matchAlias(message.author.id, message.content),
+                {
+                    component: 'proxy',
+                    userId: message.author.id,
+                    guildId: message.guildId || undefined,
+                    channelId: message.channelId,
+                    status: 'degraded_mode_fallback'
+                },
+                null,
+                'Failed to match alias'
+            ).then(match => ({ type: 'match', value: match }))
+        );
 
-        const promises: Promise<{ type: string; value: any }>[] = [
-            matchPromise,
-            formPromise,
+        // Form fetch (will be resolved after match)
+        promises.push(
+            handleDegradedModeError(
+                () => matchAlias(message.author.id, message.content),
+                {
+                    component: 'proxy',
+                    userId: message.author.id,
+                    guildId: message.guildId || undefined,
+                    channelId: message.channelId,
+                    status: 'degraded_mode_fallback'
+                },
+                null,
+                'Failed to match alias for form'
+            ).then(async (match) => {
+                if (match) {
+                    return handleDegradedModeError(
+                        () => formRepo.getCachedByUserAndId(message.author.id, match.alias.formId),
+                        {
+                            component: 'proxy',
+                            userId: message.author.id,
+                            guildId: message.guildId || undefined,
+                            channelId: message.channelId,
+                            status: 'degraded_mode_fallback'
+                        },
+                        null,
+                        'Failed to fetch form'
+                    );
+                }
+                return null;
+            }).then(form => ({ type: 'form', value: form }))
+        );
+
+        // Member fetch
+        promises.push(
             handleDegradedModeError(
                 () => message.guild!.members.fetch(message.author.id),
                 {
@@ -116,21 +148,66 @@ export async function messageCreateProxy(message: Message) {
                 null,
                 'Failed to fetch member'
             ).then(member => ({ type: 'member', value: member }))
-        ];
+        );
 
         // Collect Discord.js attachments
         const discordAttachments = Array.from(message.attachments.values());
 
         if (discordAttachments.length > 0) {
+            // Split attachments by size for follow-up edits optimization
+            const { small, large } = splitAttachmentsBySize(
+                discordAttachments.map(attachment => ({
+                    name: attachment.name,
+                    url: attachment.url,
+                    id: attachment.id,
+                    size: attachment.size
+                }))
+            );
+
+            log.debug('Attachment size analysis in listener', {
+                component: 'proxy',
+                userId: message.author.id,
+                guildId: message.guildId || undefined,
+                channelId: message.channelId,
+                totalAttachments: discordAttachments.length,
+                smallAttachments: small.length,
+                largeAttachments: large.length,
+                status: 'attachment_analysis_listener'
+            });
+
+            // Reupload only small attachments initially
+            if (small.length > 0) {
+                promises.push(
+                    handleDegradedModeError(
+                        () => reuploadAttachments(small),
+                        {
+                            component: 'proxy',
+                            userId: message.author.id,
+                            guildId: message.guildId || undefined,
+                            channelId: message.channelId,
+                            status: 'degraded_mode_fallback'
+                        },
+                        [],
+                        'Failed to reupload small attachments'
+                    ).then(attachments => ({ type: 'attachments', value: attachments }))
+                );
+            }
+
+            // Store large attachments for follow-up processing
+            if (large.length > 0) {
+                promises.push(Promise.resolve({ type: 'largeAttachments', value: large }));
+            }
+        }
+
+        // Reply fetch if reference exists
+        if (message.reference && message.reference.guildId && message.reference.channelId && message.reference.messageId) {
             promises.push(
                 handleDegradedModeError(
-                    () => reuploadAttachments(
-                        discordAttachments.map(attachment => ({
-                            name: attachment.name,
-                            url: attachment.url,
-                            id: attachment.id
-                        }))
-                    ),
+                    async () => {
+                        const channel = await client.channels.fetch(message.reference!.channelId!);
+                        if (!channel?.isTextBased()) throw new Error('Channel not found or not text-based');
+                        return await channel.messages.fetch(message.reference!.messageId!);
+                    },
                     {
                         component: 'proxy',
                         userId: message.author.id,
@@ -138,9 +215,9 @@ export async function messageCreateProxy(message: Message) {
                         channelId: message.channelId,
                         status: 'degraded_mode_fallback'
                     },
-                    [],
-                    'Failed to reupload attachments'
-                ).then(attachments => ({ type: 'attachments', value: attachments }))
+                    null,
+                    'Failed to fetch reply message'
+                ).then(replyMessage => ({ type: 'reply', value: replyMessage }))
             );
         }
 
@@ -160,6 +237,8 @@ export async function messageCreateProxy(message: Message) {
         let form = null;
         let member = null;
         let standardizedAttachments: any[] = [];
+        let largeAttachments: any[] = [];
+        let replyMessage = null;
         for (const result of results) {
             if (result.status === 'fulfilled') {
                 const { type, value } = result.value;
@@ -167,6 +246,8 @@ export async function messageCreateProxy(message: Message) {
                 else if (type === 'form') form = value;
                 else if (type === 'member') member = value;
                 else if (type === 'attachments') standardizedAttachments = value;
+                else if (type === 'largeAttachments') largeAttachments = value;
+                else if (type === 'reply') replyMessage = value;
             }
         }
 
@@ -295,7 +376,7 @@ export async function messageCreateProxy(message: Message) {
 
         // Proxy the message via coordinator with standardized attachments
         const proxySendStart = performance.now();
-        await proxyCoordinator(
+        const proxyResult = await proxyCoordinator(
             message.author.id,
             form.id,
             message.channelId,
@@ -303,7 +384,9 @@ export async function messageCreateProxy(message: Message) {
             match.renderedText,
             channelProxy,
             standardizedAttachments,
-            replyTo
+            replyTo,
+            form,
+            replyMessage
         );
         const proxySendDuration = performance.now() - proxySendStart;
         log.debug('Proxy stage complete', {
@@ -314,6 +397,53 @@ export async function messageCreateProxy(message: Message) {
             guildId: message.guildId || undefined,
             channelId: message.channelId
         });
+
+        // Handle large attachments with follow-up edits
+        if (largeAttachments.length > 0) {
+            log.info('Processing large attachments with follow-up edits', {
+                component: 'proxy',
+                userId: message.author.id,
+                guildId: message.guildId || undefined,
+                channelId: message.channelId,
+                messageId: proxyResult.messageId,
+                largeAttachmentCount: largeAttachments.length,
+                status: 'follow_up_edits_start'
+            });
+
+            // Upload large attachments in parallel and edit the message (fire-and-forget)
+            void handleDegradedModeError(async () => {
+                const startTime = Date.now();
+                const { reuploadAttachments } = await import('../../../shared/utils/attachments');
+                const largeAttachmentBuffers = await reuploadAttachments(largeAttachments);
+
+                if (largeAttachmentBuffers.length > 0) {
+                    const editData = {
+                        content: match.renderedText, // Use the rendered text content
+                        attachments: [...standardizedAttachments, ...largeAttachmentBuffers],
+                        allowedMentions: { parse: [] } // Default to no pings
+                    };
+
+                    await channelProxy.edit(proxyResult.webhookId, proxyResult.token, proxyResult.messageId, editData);
+
+                    log.info('Large attachments added via follow-up edit', {
+                        component: 'proxy',
+                        userId: message.author.id,
+                        guildId: message.guildId || undefined,
+                        channelId: message.channelId,
+                        messageId: proxyResult.messageId,
+                        largeAttachmentsAdded: largeAttachmentBuffers.length,
+                        durationMs: Date.now() - startTime,
+                        status: 'follow_up_edits_success'
+                    });
+                }
+            }, {
+                component: 'proxy',
+                userId: message.author.id,
+                guildId: message.guildId || undefined,
+                channelId: message.channelId,
+                messageId: proxyResult.messageId
+            }, undefined, 'follow_up_attachment_edits');
+        }
 
         log.info('Message proxied successfully via tag', {
             component: 'proxy',

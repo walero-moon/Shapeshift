@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { matchAlias, clearAliasCache, invalidateAliasCache } from '../app/MatchAlias';
+import { matchAlias, clearAliasCache, invalidateAliasCache, resetCacheStats, type CachedAlias } from '../app/MatchAlias';
 import { aliasRepo, type Alias } from '../../identity/infra/AliasRepo';
 import { log } from '../../../shared/utils/logger';
 
@@ -22,6 +22,7 @@ describe('matchAlias function', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         clearAliasCache();
+        resetCacheStats();
     });
 
     it('should return null when no aliases exist for user', async () => {
@@ -74,7 +75,7 @@ describe('matchAlias function', () => {
     });
 
     it('should match the longest prefix alias', async () => {
-        const mockAliases = [
+        const mockAliases: CachedAlias[] = [
             {
                 id: 'alias1',
                 userId: 'user1',
@@ -83,6 +84,7 @@ describe('matchAlias function', () => {
                 triggerNorm: 'n:text',
                 kind: 'prefix' as const,
                 createdAt: new Date(),
+                prefix: 'n:',
             },
             {
                 id: 'alias2',
@@ -92,11 +94,12 @@ describe('matchAlias function', () => {
                 triggerNorm: 'neoli:text',
                 kind: 'prefix' as const,
                 createdAt: new Date(),
+                prefix: 'neoli:',
             },
         ];
-        const groupedAliases: Record<string, Alias[]> = {
-            'form1': [mockAliases[0] as Alias],
-            'form2': [mockAliases[1] as Alias]
+        const groupedAliases: Record<string, CachedAlias[]> = {
+            'form1': [mockAliases[0]!],
+            'form2': [mockAliases[1]!]
         };
         vi.mocked(aliasRepo.listByUserGrouped).mockResolvedValue(groupedAliases);
 
@@ -322,7 +325,8 @@ describe('matchAlias function', () => {
             expect(log.info).toHaveBeenCalledWith('Cache miss for alias list', {
                 component: 'proxy',
                 userId: 'user1',
-                status: 'cache_miss'
+                status: 'cache_miss',
+                hitRate: 0
             });
 
             // Second call - cache hit
@@ -331,7 +335,8 @@ describe('matchAlias function', () => {
             expect(log.info).toHaveBeenCalledWith('Cache hit for alias list', {
                 component: 'proxy',
                 userId: 'user1',
-                status: 'cache_hit'
+                status: 'cache_hit',
+                hitRate: 0.5
             });
         });
 

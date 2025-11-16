@@ -91,19 +91,11 @@ export const command = {
             const formId = interaction.options.getString('form', true);
             const text = interaction.options.getString('text', true);
 
-            // Get the form from database
-            const form = await formRepo.getById(formId);
+            // Get the form from cache/database
+            const form = await formRepo.getCachedByUserAndId(interaction.user.id, formId);
             if (!form) {
                 return interaction.editReply({
                     content: 'Form not found. Please select a valid form.',
-                    allowedMentions: DEFAULT_ALLOWED_MENTIONS
-                });
-            }
-
-            // Check if the form belongs to the user
-            if (form.userId !== interaction.user.id) {
-                return interaction.editReply({
-                    content: 'You can only send as your own forms.',
                     allowedMentions: DEFAULT_ALLOWED_MENTIONS
                 });
             }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { reuploadAttachments } from '../attachments';
+import { reuploadAttachments, splitAttachmentsBySize } from '../attachments';
 import { retryAsync } from '../retry';
 import { log } from '../logger';
 import { handleDegradedModeError } from '../errorHandling';
@@ -35,16 +35,6 @@ describe('reuploadAttachments', () => {
     it('should return empty array for no attachments', async () => {
         const result = await reuploadAttachments([]);
         expect(result).toEqual([]);
-
-        expect(mockLog.debug).toHaveBeenCalledWith(
-            'No attachments to reupload',
-            expect.objectContaining({
-                component: 'utils',
-                stage: 'attachments',
-                durationMs: 0,
-                status: 'attachment_noop'
-            })
-        );
     });
 
     it('should successfully download attachment using buffer', async () => {
@@ -203,5 +193,81 @@ describe('reuploadAttachments', () => {
                 status: 'attachment_reupload_failed'
             })
         );
+    });
+});
+
+describe('splitAttachmentsBySize', () => {
+    it('should split attachments into small and large based on threshold', () => {
+        const attachments = [
+            {
+                name: 'small.png',
+                url: 'https://example.com/small.png',
+                id: '1',
+                size: 1000 // 1KB, below threshold
+            },
+            {
+                name: 'large.png',
+                url: 'https://example.com/large.png',
+                id: '2',
+                size: 6000000 // 6MB, above threshold
+            },
+            {
+                name: 'medium.png',
+                url: 'https://example.com/medium.png',
+                id: '3',
+                size: 2000000 // 2MB, below threshold
+            }
+        ];
+
+        const { small, large } = splitAttachmentsBySize(attachments);
+
+        expect(small).toHaveLength(2);
+        expect(small).toEqual([
+            {
+                name: 'small.png',
+                url: 'https://example.com/small.png',
+                id: '1',
+                size: 1000
+            },
+            {
+                name: 'medium.png',
+                url: 'https://example.com/medium.png',
+                id: '3',
+                size: 2000000
+            }
+        ]);
+
+        expect(large).toHaveLength(1);
+        expect(large).toEqual([
+            {
+                name: 'large.png',
+                url: 'https://example.com/large.png',
+                id: '2',
+                size: 6000000
+            }
+        ]);
+    });
+
+    it('should treat attachments without size as large', () => {
+        const attachments = [
+            {
+                name: 'no-size.png',
+                url: 'https://example.com/no-size.png',
+                id: '1'
+                // No size property
+            }
+        ];
+
+        const { small, large } = splitAttachmentsBySize(attachments);
+
+        expect(small).toHaveLength(0);
+        expect(large).toHaveLength(1);
+    });
+
+    it('should return empty arrays for empty input', () => {
+        const { small, large } = splitAttachmentsBySize([]);
+
+        expect(small).toHaveLength(0);
+        expect(large).toHaveLength(0);
     });
 });

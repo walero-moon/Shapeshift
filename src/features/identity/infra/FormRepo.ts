@@ -20,16 +20,21 @@ export interface Form {
 export interface FormRepo {
   create(userId: string, data: CreateFormData): Promise<Form>;
   getById(id: string): Promise<Form | null>;
+  getCachedByUserAndId(userId: string, formId: string): Promise<Form | null>;
   getByUser(userId: string): Promise<Form[]>;
   updateNameAvatar(id: string, data: Partial<CreateFormData>): Promise<Form>;
   delete(id: string): Promise<void>;
+  invalidateCache(userId: string, formId: string): void;
 }
 
 /**
  * Form Repository using Drizzle ORM with UUIDv7 support
  * Provides database operations for form management with time-ordered UUIDs
+ * Includes TTL cache for form lookups keyed by (userId, formId)
  */
 export class DrizzleFormRepo implements FormRepo {
+  private cache = new Map<string, { form: Form; expiresAt: number }>();
+  private readonly TTL_MS = 5 * 60 * 1000; // 5 minutes
   async create(userId: string, data: CreateFormData): Promise<Form> {
     if (!data.name?.trim()) {
       throw new Error('Form name is required');
@@ -71,6 +76,36 @@ export class DrizzleFormRepo implements FormRepo {
       log.error('Failed to get form by ID', { component: 'identity', status: 'database_error', error });
       throw error;
     }
+  }
+
+  async getCachedByUserAndId(userId: string, formId: string): Promise<Form | null> {
+    const key = `${userId}:${formId}`;
+    const now = Date.now();
+
+    // Check cache
+    const cached = this.cache.get(key);
+    if (cached && cached.expiresAt > now) {
+      log.debug('Form cache hit', { component: 'identity', userId, formId, status: 'cache_hit' });
+      return cached.form;
+    }
+
+    // Cache miss or expired, fetch from DB
+    log.debug('Form cache miss', { component: 'identity', userId, formId, status: 'cache_miss' });
+    const form = await this.getById(formId);
+
+    if (form && form.userId === userId) {
+      // Cache the form
+      this.cache.set(key, { form, expiresAt: now + this.TTL_MS });
+      return form;
+    }
+
+    return null;
+  }
+
+  invalidateCache(userId: string, formId: string): void {
+    const key = `${userId}:${formId}`;
+    this.cache.delete(key);
+    log.debug('Form cache invalidated', { component: 'identity', userId, formId, status: 'cache_invalidated' });
   }
 
   async getByUser(userId: string): Promise<Form[]> {

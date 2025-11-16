@@ -5,6 +5,7 @@ import { formRepo } from '../../identity/infra/FormRepo';
 import { proxiedMessageRepo } from '../infra/ProxiedMessageRepo';
 import { generateUuidv7OrUndefined } from '../../../shared/db/uuidDetection';
 import { log } from '../../../shared/utils/logger';
+import { handleDegradedModeError } from '../../../shared/utils/errorHandling';
 import { Form } from '../../identity/infra/FormRepo';
 
 // Mock dependencies
@@ -35,6 +36,10 @@ vi.mock('../../../shared/db/uuidDetection', () => ({
     generateUuidv7OrUndefined: vi.fn(),
 }));
 
+vi.mock('../../../shared/utils/errorHandling', () => ({
+    handleDegradedModeError: vi.fn(),
+}));
+
 describe('proxyCoordinator function', () => {
     let mockChannelProxy: Mocked<ChannelProxyPort>;
     let mockForm: Form;
@@ -59,6 +64,7 @@ describe('proxyCoordinator function', () => {
         (formRepo.getById as any).mockResolvedValue(mockForm);
         (generateUuidv7OrUndefined as any).mockReturnValue('uuid123');
         (proxiedMessageRepo.insert as any).mockResolvedValue(undefined);
+        (handleDegradedModeError as any).mockResolvedValue(undefined);
     });
 
     it('should successfully coordinate proxy operation', async () => {
@@ -91,16 +97,19 @@ describe('proxyCoordinator function', () => {
             allowedMentions: { parse: [], repliedUser: false },
             avatarUrl: 'https://example.com/avatar.png',
         }, undefined);
-        expect(proxiedMessageRepo.insert).toHaveBeenCalledWith({
-            id: 'uuid123',
-            userId: 'user1',
-            formId: 'form1',
-            guildId: 'guild1',
-            channelId: 'channel1',
-            webhookId: 'webhook123',
-            webhookToken: 'token456',
-            messageId: 'msg789',
-        });
+        expect(handleDegradedModeError).toHaveBeenCalledWith(
+            expect.any(Function),
+            {
+                component: 'proxy',
+                userId: 'user1',
+                formId: 'form1',
+                guildId: 'guild1',
+                channelId: 'channel1',
+                messageId: 'msg789'
+            },
+            undefined,
+            'proxied_message_insert'
+        );
         expect(log.info).toHaveBeenCalledTimes(2); // start and success
         expect(log.error).not.toHaveBeenCalled();
     });
@@ -214,18 +223,22 @@ describe('proxyCoordinator function', () => {
             mockChannelProxy
         );
 
-        expect(proxiedMessageRepo.insert).toHaveBeenCalledWith({
-            userId: 'user1',
-            formId: 'form1',
-            guildId: 'guild1',
-            channelId: 'channel1',
-            webhookId: 'webhook123',
-            webhookToken: 'token456',
-            messageId: 'msg789',
-        });
+        expect(handleDegradedModeError).toHaveBeenCalledWith(
+            expect.any(Function),
+            {
+                component: 'proxy',
+                userId: 'user1',
+                formId: 'form1',
+                guildId: 'guild1',
+                channelId: 'channel1',
+                messageId: 'msg789'
+            },
+            undefined,
+            'proxied_message_insert'
+        );
     });
 
-    it('should throw error when database insert fails', async () => {
+    it('should handle database insert failure gracefully with fire-and-forget persistence', async () => {
         const mockSendResult = {
             webhookId: 'webhook123',
             webhookToken: 'token456',
@@ -234,16 +247,34 @@ describe('proxyCoordinator function', () => {
         mockChannelProxy.send.mockResolvedValue(mockSendResult);
         (proxiedMessageRepo.insert as any).mockRejectedValue(new Error('DB insert failed'));
 
-        await expect(proxyCoordinator(
+        const result = await proxyCoordinator(
             'user1',
             'form1',
             'channel1',
             'guild1',
             'Hello world!',
             mockChannelProxy
-        )).rejects.toThrow('DB insert failed');
+        );
 
-        expect(log.error).toHaveBeenCalled();
+        expect(result).toEqual({
+            webhookId: 'webhook123',
+            token: 'token456',
+            messageId: 'msg789',
+        });
+
+        expect(handleDegradedModeError).toHaveBeenCalledWith(
+            expect.any(Function),
+            {
+                component: 'proxy',
+                userId: 'user1',
+                formId: 'form1',
+                guildId: 'guild1',
+                channelId: 'channel1',
+                messageId: 'msg789'
+            },
+            undefined,
+            'proxied_message_insert'
+        );
     });
 
     it('should log start and error on failure', async () => {

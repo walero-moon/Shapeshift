@@ -3,11 +3,37 @@ interface DiscordAttachment {
     name?: string;
     url: string;
     id: string;
+    size?: number; // Size in bytes
 }
 
 import { Readable } from 'node:stream';
 import { retryAsync } from './retry';
 import { log } from './logger';
+
+// Threshold for "large" attachments that should use follow-up edits (5MB)
+const LARGE_ATTACHMENT_THRESHOLD = 5 * 1024 * 1024; // 5MB in bytes
+
+/**
+ * Splits attachments into small and large categories based on size threshold.
+ * Large attachments will use follow-up edits for better perceived performance.
+ */
+export function splitAttachmentsBySize(attachments: DiscordAttachment[]): {
+    small: DiscordAttachment[];
+    large: DiscordAttachment[];
+} {
+    const small: DiscordAttachment[] = [];
+    const large: DiscordAttachment[] = [];
+
+    for (const attachment of attachments) {
+        if (attachment.size === undefined || attachment.size >= LARGE_ATTACHMENT_THRESHOLD) {
+            large.push(attachment);
+        } else {
+            small.push(attachment);
+        }
+    }
+
+    return { small, large };
+}
 
 /**
  * Re-uploads Discord attachments by downloading them and returning as streams or buffers
@@ -16,12 +42,6 @@ import { log } from './logger';
  */
 export async function reuploadAttachments(attachments: DiscordAttachment[]): Promise<Array<{ name: string; data: Buffer | Readable }>> {
     if (attachments.length === 0) {
-        log.debug('No attachments to reupload', {
-            component: 'utils',
-            stage: 'attachments',
-            durationMs: 0,
-            status: 'attachment_noop'
-        });
         return [];
     }
 

@@ -20,6 +20,9 @@ export async function deleteForm(formId: string, userId: string): Promise<void> 
             throw new Error('Form does not belong to user');
         }
 
+        // Invalidate cache before deleting
+        formRepo.invalidateCache(userId, formId);
+
         // Delete the form itself; aliases are removed via ON DELETE CASCADE
         await formRepo.delete(formId);
     } catch (error) {

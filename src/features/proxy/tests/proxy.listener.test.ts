@@ -24,6 +24,7 @@ vi.mock('../../../shared/utils/attachments', () => ({
 vi.mock('../../../features/identity/infra/FormRepo', () => ({
     formRepo: {
         getById: vi.fn(),
+        getCachedByUserAndId: vi.fn(),
     },
 }));
 
@@ -52,6 +53,7 @@ import { formRepo } from '../../../features/identity/infra/FormRepo';
 import { DiscordChannelProxy } from '../../../adapters/discord/DiscordChannelProxy';
 import { reuploadAttachments } from '../../../shared/utils/attachments';
 import { handleDegradedModeError } from '../../../shared/utils/errorHandling';
+import log from '../../../shared/utils/logger';
 
 describe('messageCreateProxy function', () => {
     let mockMessage: Message<boolean>;
@@ -82,9 +84,7 @@ describe('messageCreateProxy function', () => {
 
         vi.mocked(DiscordChannelProxy).mockImplementation(() => mockChannelProxy as DiscordChannelProxy);
         vi.mocked(mockMessage.guild!.members.fetch).mockResolvedValue({} as any); // Mock successful member fetch
-        vi.mocked(handleDegradedModeError).mockImplementation(async (fn) => {
-            await fn(); // Execute the function for testing
-        });
+        vi.mocked(handleDegradedModeError).mockImplementation((fn) => fn()); // Execute the function for testing and return the promise
     });
 
     it('should skip bot messages', async () => {
@@ -101,6 +101,42 @@ describe('messageCreateProxy function', () => {
         await messageCreateProxy(mockMessage);
 
         expect(matchAlias).not.toHaveBeenCalled();
+    });
+
+    it('should skip messages that are too short for alias prefixes', async () => {
+        mockMessage.content = 'hi'; // length 2 < 6
+
+        await messageCreateProxy(mockMessage);
+
+        expect(matchAlias).not.toHaveBeenCalled();
+        expect(log.debug).toHaveBeenCalledWith('Early bail-out: message too short or lacks alias markers', expect.objectContaining({
+            component: 'proxy',
+            userId: 'user123',
+            guildId: 'guild789',
+            channelId: 'channel456',
+            contentLength: 2,
+            hasColon: false,
+            hasBrace: false,
+            status: 'early_bailout'
+        }));
+    });
+
+    it('should skip messages that lack colon or brace markers', async () => {
+        mockMessage.content = 'hello world'; // length 11, no : or {
+
+        await messageCreateProxy(mockMessage);
+
+        expect(matchAlias).not.toHaveBeenCalled();
+        expect(log.debug).toHaveBeenCalledWith('Early bail-out: message too short or lacks alias markers', expect.objectContaining({
+            component: 'proxy',
+            userId: 'user123',
+            guildId: 'guild789',
+            channelId: 'channel456',
+            contentLength: 11,
+            hasColon: false,
+            hasBrace: false,
+            status: 'early_bailout'
+        }));
     });
 
     it('should skip messages that do not match any alias', async () => {
@@ -122,6 +158,7 @@ describe('messageCreateProxy function', () => {
                 triggerNorm: 'n:text',
                 kind: 'prefix' as const,
                 createdAt: new Date(),
+                prefix: 'n:',
             },
             renderedText: 'hello world',
         };
@@ -135,7 +172,7 @@ describe('messageCreateProxy function', () => {
         };
 
         vi.mocked(matchAlias).mockResolvedValue(mockMatch);
-        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
+        vi.mocked(formRepo.getCachedByUserAndId).mockResolvedValue(mockForm);
         vi.mocked(validateUserChannelPerms).mockResolvedValue(true);
         vi.mocked(proxyCoordinator).mockResolvedValue({
             webhookId: 'webhook123',
@@ -146,7 +183,7 @@ describe('messageCreateProxy function', () => {
         await messageCreateProxy(mockMessage);
 
         expect(matchAlias).toHaveBeenCalledWith('user123', 'n:text hello world');
-        expect(formRepo.getById).toHaveBeenCalledWith('form1');
+        expect(formRepo.getCachedByUserAndId).toHaveBeenCalledWith('user123', 'form1');
         expect(validateUserChannelPerms).toHaveBeenCalledWith('user123', expect.any(Object), [], expect.any(Object));
         expect(handleDegradedModeError).toHaveBeenCalledWith(
             expect.any(Function),
@@ -173,6 +210,7 @@ describe('messageCreateProxy function', () => {
                 triggerNorm: 'n:text',
                 kind: 'prefix' as const,
                 createdAt: new Date(),
+                prefix: 'n:',
             },
             renderedText: 'hello world',
         };
@@ -186,13 +224,13 @@ describe('messageCreateProxy function', () => {
         };
 
         vi.mocked(matchAlias).mockResolvedValue(mockMatch);
-        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
+        vi.mocked(formRepo.getCachedByUserAndId).mockResolvedValue(mockForm);
         vi.mocked(validateUserChannelPerms).mockResolvedValue(false);
 
         await messageCreateProxy(mockMessage);
 
         expect(matchAlias).toHaveBeenCalledWith('user123', 'n:text hello world');
-        expect(formRepo.getById).toHaveBeenCalledWith('form1');
+        expect(formRepo.getCachedByUserAndId).toHaveBeenCalledWith('user123', 'form1');
         expect(validateUserChannelPerms).toHaveBeenCalledWith('user123', expect.any(Object), expect.any(Array), expect.any(Object));
         expect(DiscordChannelProxy).not.toHaveBeenCalled();
         expect(proxyCoordinator).not.toHaveBeenCalled();
@@ -208,6 +246,7 @@ describe('messageCreateProxy function', () => {
                 triggerNorm: 'n:text',
                 kind: 'prefix' as const,
                 createdAt: new Date(),
+                prefix: 'n:',
             },
             renderedText: 'hello world',
         };
@@ -281,6 +320,7 @@ describe('messageCreateProxy function', () => {
                 triggerNorm: 'n:text',
                 kind: 'prefix' as const,
                 createdAt: new Date(),
+                prefix: 'n:',
             },
             renderedText: 'hello world',
         };
@@ -303,6 +343,7 @@ describe('messageCreateProxy function', () => {
                 triggerNorm: 'n:text',
                 kind: 'prefix' as const,
                 createdAt: new Date(),
+                prefix: 'n:',
             },
             renderedText: 'hello world',
         };
@@ -345,6 +386,7 @@ describe('messageCreateProxy function', () => {
                 triggerNorm: 'n:text',
                 kind: 'prefix' as const,
                 createdAt: new Date(),
+                prefix: 'n:',
             },
             renderedText: 'hello world',
         };
@@ -368,6 +410,7 @@ describe('messageCreateProxy function', () => {
                 triggerNorm: 'n:text',
                 kind: 'prefix' as const,
                 createdAt: new Date(),
+                prefix: 'n:',
             },
             renderedText: 'hello world',
         };
@@ -400,6 +443,7 @@ describe('messageCreateProxy function', () => {
                 triggerNorm: 'n:text',
                 kind: 'prefix' as const,
                 createdAt: new Date(),
+                prefix: 'n:',
             },
             renderedText: 'hello world',
         };

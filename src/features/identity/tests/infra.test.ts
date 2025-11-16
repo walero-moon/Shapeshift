@@ -33,6 +33,7 @@ vi.mock('../../../shared/db/schema', () => ({
 vi.mock('../../../shared/utils/logger', () => ({
     log: {
         error: vi.fn(),
+        debug: vi.fn(),
     },
 }));
 
@@ -248,5 +249,137 @@ describe('AliasRepo error handling', () => {
         });
 
         await expect(aliasRepo.delete('alias1')).rejects.toThrow('__vite_ssr_import_1__.db.delete(...).where(...).returning is not a function');
+    });
+});
+
+describe('FormRepo cache behavior', () => {
+    let formRepo: DrizzleFormRepo;
+    let mockDb: MockedDb;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        formRepo = new DrizzleFormRepo();
+
+        // Get references to mocked functions
+        mockDb = db as unknown as MockedDb;
+    });
+
+    it('should cache form on first lookup and return from cache on second', async () => {
+        const mockForm = {
+            id: 'form1',
+            userId: 'user1',
+            name: 'Test Form',
+            avatarUrl: null,
+            createdAt: new Date()
+        };
+
+        // First call - should hit DB
+        mockDb.select.mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockResolvedValue([mockForm]),
+            }),
+        });
+
+        const result1 = await formRepo.getCachedByUserAndId('user1', 'form1');
+        expect(result1).toEqual(mockForm);
+
+        // Second call - should hit cache
+        const result2 = await formRepo.getCachedByUserAndId('user1', 'form1');
+        expect(result2).toEqual(mockForm);
+
+        // DB should only be called once
+        expect(mockDb.select).toHaveBeenCalledTimes(1);
+    });
+
+    it('should return null for non-existent form', async () => {
+        mockDb.select.mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockResolvedValue([]),
+            }),
+        });
+
+        const result = await formRepo.getCachedByUserAndId('user1', 'form1');
+        expect(result).toBeNull();
+    });
+
+    it('should return null when form belongs to different user', async () => {
+        const mockForm = {
+            id: 'form1',
+            userId: 'user2', // Different user
+            name: 'Test Form',
+            avatarUrl: null,
+            createdAt: new Date()
+        };
+
+        mockDb.select.mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockResolvedValue([mockForm]),
+            }),
+        });
+
+        const result = await formRepo.getCachedByUserAndId('user1', 'form1');
+        expect(result).toBeNull();
+    });
+
+    it('should invalidate cache correctly', async () => {
+        const mockForm = {
+            id: 'form1',
+            userId: 'user1',
+            name: 'Test Form',
+            avatarUrl: null,
+            createdAt: new Date()
+        };
+
+        // First call - cache it
+        mockDb.select.mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockResolvedValue([mockForm]),
+            }),
+        });
+
+        await formRepo.getCachedByUserAndId('user1', 'form1');
+        expect(mockDb.select).toHaveBeenCalledTimes(1);
+
+        // Invalidate cache
+        formRepo.invalidateCache('user1', 'form1');
+
+        // Second call - should hit DB again
+        await formRepo.getCachedByUserAndId('user1', 'form1');
+        expect(mockDb.select).toHaveBeenCalledTimes(2);
+    });
+
+    it('should handle cache expiration', async () => {
+        const mockForm = {
+            id: 'form1',
+            userId: 'user1',
+            name: 'Test Form',
+            avatarUrl: null,
+            createdAt: new Date()
+        };
+
+        // Mock Date.now to control time
+        let currentTime = 1000000000000; // Some timestamp
+
+        const dateNowSpy = vi.spyOn(Date, 'now').mockImplementation(() => currentTime);
+
+        // First call - cache it
+        mockDb.select.mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockResolvedValue([mockForm]),
+            }),
+        });
+
+        await formRepo.getCachedByUserAndId('user1', 'form1');
+        expect(mockDb.select).toHaveBeenCalledTimes(1);
+
+        // Advance time past TTL (5 minutes = 300000 ms)
+        currentTime += 300001;
+
+        // Second call - should hit DB again due to expiration
+        await formRepo.getCachedByUserAndId('user1', 'form1');
+        expect(mockDb.select).toHaveBeenCalledTimes(2);
+
+        // Restore original Date.now
+        dateNowSpy.mockRestore();
     });
 });

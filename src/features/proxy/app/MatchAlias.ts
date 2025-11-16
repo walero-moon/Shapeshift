@@ -2,16 +2,29 @@ import { aliasRepo, type Alias } from '../../identity/infra/AliasRepo';
 import { log } from '../../../shared/utils/logger';
 
 /**
+ * Cached alias with pre-parsed tokens for efficient matching
+ */
+export interface CachedAlias extends Alias {
+    prefix: string;
+    suffix?: string;
+}
+
+/**
  * In-memory TTL cache for alias lists per userId
  */
-const aliasCache = new Map<string, { aliases: Alias[], expiresAt: number }>();
+const aliasCache = new Map<string, { aliases: CachedAlias[], expiresAt: number }>();
 const TTL = 300000; // 5 minutes in milliseconds
+
+/**
+ * Cache statistics for hit rate tracking
+ */
+const cacheStats = { hits: 0, total: 0 };
 
 /**
  * Result of matching an alias to user input text
  */
 export interface MatchResult {
-    alias: Alias;
+    alias: CachedAlias;
     renderedText: string;
 }
 
@@ -30,6 +43,14 @@ export function clearAliasCache(): void {
     aliasCache.clear();
 }
 
+/**
+ * Reset cache statistics (for testing)
+ */
+export function resetCacheStats(): void {
+    cacheStats.hits = 0;
+    cacheStats.total = 0;
+}
+
 
 /**
  * Match user input text against the user's aliases using longest-prefix wins for prefixes and exact pattern matching for patterns
@@ -41,27 +62,44 @@ export function clearAliasCache(): void {
  * @returns MatchResult if an alias matches, null otherwise
  */
 export async function matchAlias(userId: string, text: string): Promise<MatchResult | null> {
+    const start = Date.now();
     try {
+        cacheStats.total++;
         // Check cache first
         const cached = aliasCache.get(userId);
-        let aliases: Alias[];
+        let aliases: CachedAlias[];
 
         if (cached && cached.expiresAt > Date.now()) {
+            cacheStats.hits++;
             aliases = cached.aliases;
+            const hitRate = cacheStats.hits / cacheStats.total;
             log.info('Cache hit for alias list', {
                 component: 'proxy',
                 userId,
-                status: 'cache_hit'
+                status: 'cache_hit',
+                hitRate
             });
         } else {
             // Cache miss or expired, fetch from DB
             const groupedAliases = await aliasRepo.listByUserGrouped(userId);
-            aliases = Object.values(groupedAliases).flat();
+            const rawAliases = Object.values(groupedAliases).flat();
+            aliases = rawAliases.map(alias => {
+                const parts = alias.triggerNorm.split('text');
+                const prefix = parts[0] ?? '';
+                if (alias.kind === 'pattern') {
+                    const suffix = parts[1] ?? '';
+                    return { ...alias, prefix, suffix };
+                } else {
+                    return { ...alias, prefix };
+                }
+            });
             aliasCache.set(userId, { aliases, expiresAt: Date.now() + TTL });
+            const hitRate = cacheStats.hits / cacheStats.total;
             log.info('Cache miss for alias list', {
                 component: 'proxy',
                 userId,
-                status: 'cache_miss'
+                status: 'cache_miss',
+                hitRate
             });
         }
 
@@ -71,14 +109,13 @@ export async function matchAlias(userId: string, text: string): Promise<MatchRes
 
         // First, try longest-prefix wins for prefix aliases
         if (prefixAliases.length > 0) {
-            let bestMatch: Alias | null = null;
+            let bestMatch: CachedAlias | null = null;
             let longestPrefixLength = 0;
 
             const lowerText = text.toLowerCase();
 
             for (const alias of prefixAliases) {
-                // Extract prefix as everything before "text" in trigger_norm
-                const prefix = alias.triggerNorm.split('text')[0] ?? '';
+                const prefix = alias.prefix;
                 if (lowerText.startsWith(prefix)) {
                     if (prefix.length > longestPrefixLength) {
                         bestMatch = alias;
@@ -92,13 +129,15 @@ export async function matchAlias(userId: string, text: string): Promise<MatchRes
                 const afterPrefix = text.slice(longestPrefixLength);
                 const renderedText = afterPrefix.replace(/^text/, '').trim();
 
+                const duration = Date.now() - start;
                 log.info('Alias matched successfully', {
                     component: 'proxy',
                     userId,
                     aliasId: bestMatch.id,
                     formId: bestMatch.formId,
                     trigger: bestMatch.triggerRaw,
-                    status: 'match_success'
+                    status: 'match_success',
+                    duration
                 });
 
                 return {
@@ -110,12 +149,10 @@ export async function matchAlias(userId: string, text: string): Promise<MatchRes
 
         // If no prefix match, try pattern aliases
         for (const alias of patternAliases) {
-            // Extract prefix and suffix around "text"
-            const parts = alias.triggerNorm.split('text');
-            if (parts.length !== 2) continue; // Invalid pattern, skip
+            if (alias.suffix === undefined) continue; // Should not happen
 
-            const prefix = parts[0] ?? '';
-            const suffix = parts[1] ?? '';
+            const prefix = alias.prefix;
+            const suffix = alias.suffix;
 
             // Check if text matches the pattern structure
             if (text.startsWith(prefix) && text.endsWith(suffix) && text.length > prefix.length + suffix.length) {
@@ -124,13 +161,15 @@ export async function matchAlias(userId: string, text: string): Promise<MatchRes
                 const contentEnd = text.length - suffix.length;
                 const renderedText = text.slice(contentStart, contentEnd);
 
+                const duration = Date.now() - start;
                 log.info('Alias matched successfully', {
                     component: 'proxy',
                     userId,
                     aliasId: alias.id,
                     formId: alias.formId,
                     trigger: alias.triggerRaw,
-                    status: 'match_success'
+                    status: 'match_success',
+                    duration
                 });
 
                 return {
@@ -140,12 +179,22 @@ export async function matchAlias(userId: string, text: string): Promise<MatchRes
             }
         }
 
+        const duration = Date.now() - start;
+        log.info('No alias matched', {
+            component: 'proxy',
+            userId,
+            status: 'match_no_match',
+            duration
+        });
+
         return null;
     } catch (error) {
+        const duration = Date.now() - start;
         log.error('Failed to match alias', {
             component: 'proxy',
             userId,
             status: 'match_error',
+            duration,
             error
         });
         throw error;
