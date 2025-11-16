@@ -98,34 +98,87 @@ export async function messageCreateProxy(message: Message) {
             return;
         }
 
-        // Fetch the guild member once for permission checks
-        const memberFetchStart = performance.now();
-        const member = await message.guild!.members.fetch(message.author.id);
-        const memberFetchDuration = performance.now() - memberFetchStart;
+        // Parallelize independent fetches: form, member, attachments
+        const parallelStart = performance.now();
+        const promises: Promise<{ type: string; value: any }>[] = [
+            handleDegradedModeError(
+                () => formRepo.getById(match.alias.formId),
+                {
+                    component: 'proxy',
+                    userId: message.author.id,
+                    guildId: message.guildId || undefined,
+                    channelId: message.channelId,
+                    status: 'degraded_mode_fallback'
+                },
+                null,
+                'Failed to fetch form'
+            ).then(form => ({ type: 'form', value: form })),
+            handleDegradedModeError(
+                () => message.guild!.members.fetch(message.author.id),
+                {
+                    component: 'proxy',
+                    userId: message.author.id,
+                    guildId: message.guildId || undefined,
+                    channelId: message.channelId,
+                    status: 'degraded_mode_fallback'
+                },
+                null,
+                'Failed to fetch member'
+            ).then(member => ({ type: 'member', value: member }))
+        ];
+
+        // Collect Discord.js attachments
+        const discordAttachments = Array.from(message.attachments.values());
+
+        if (discordAttachments.length > 0) {
+            promises.push(
+                handleDegradedModeError(
+                    () => reuploadAttachments(
+                        discordAttachments.map(attachment => ({
+                            name: attachment.name,
+                            url: attachment.url,
+                            id: attachment.id
+                        }))
+                    ),
+                    {
+                        component: 'proxy',
+                        userId: message.author.id,
+                        guildId: message.guildId || undefined,
+                        channelId: message.channelId,
+                        status: 'degraded_mode_fallback'
+                    },
+                    [],
+                    'Failed to reupload attachments'
+                ).then(attachments => ({ type: 'attachments', value: attachments }))
+            );
+        }
+
+        const results = await Promise.allSettled(promises);
+        const parallelDuration = performance.now() - parallelStart;
         log.debug('Proxy stage complete', {
-            stage: 'memberFetch',
-            durationMs: memberFetchDuration,
+            stage: 'parallelFetches',
+            durationMs: parallelDuration,
             component: 'proxy',
             userId: message.author.id,
             guildId: message.guildId || undefined,
             channelId: message.channelId
         });
 
-        // Get the form associated with the matched alias
-        const formFetchStart = performance.now();
-        const form = await formRepo.getById(match.alias.formId);
-        const formFetchDuration = performance.now() - formFetchStart;
-        log.debug('Proxy stage complete', {
-            stage: 'formFetch',
-            durationMs: formFetchDuration,
-            component: 'proxy',
-            userId: message.author.id,
-            guildId: message.guildId || undefined,
-            channelId: message.channelId
-        });
+        // Extract results
+        let form = null;
+        let member = null;
+        let standardizedAttachments: any[] = [];
+        for (const result of results) {
+            if (result.status === 'fulfilled') {
+                const { type, value } = result.value;
+                if (type === 'form') form = value;
+                else if (type === 'member') member = value;
+                else if (type === 'attachments') standardizedAttachments = value;
+            }
+        }
 
         if (!form) {
-            log.warn('Form not found for alias', {
+            log.warn('Form not found after parallel fetch', {
                 component: 'proxy',
                 userId: message.author.id,
                 aliasId: match.alias.id,
@@ -135,15 +188,21 @@ export async function messageCreateProxy(message: Message) {
             return;
         }
 
-        // Collect Discord.js attachments
-        const discordAttachments = Array.from(message.attachments.values());
+        if (!member) {
+            log.warn('Member not found after parallel fetch', {
+                component: 'proxy',
+                userId: message.author.id,
+                status: 'member_not_found'
+            });
+            return;
+        }
 
         // Validate user permissions in the channel
         const permsStart = performance.now();
         const hasPerms = await validateUserChannelPerms(
             message.author.id,
             message.channel as TextChannel,
-            discordAttachments,
+            Array.from(message.attachments.values()),
             member
         );
         const permsDuration = performance.now() - permsStart;
@@ -174,25 +233,6 @@ export async function messageCreateProxy(message: Message) {
             });
             return;
         }
-
-        // Reupload Discord attachments to standardized format
-        const attachmentsStart = performance.now();
-        const standardizedAttachments = await reuploadAttachments(
-            discordAttachments.map(attachment => ({
-                name: attachment.name,
-                url: attachment.url,
-                id: attachment.id
-            }))
-        );
-        const attachmentsDuration = performance.now() - attachmentsStart;
-        log.debug('Proxy stage complete', {
-            stage: 'attachments',
-            durationMs: attachmentsDuration,
-            component: 'proxy',
-            userId: message.author.id,
-            guildId: message.guildId || undefined,
-            channelId: message.channelId
-        });
 
         // Create channel proxy instance
         const channelProxy = new DiscordChannelProxy(message.channelId);

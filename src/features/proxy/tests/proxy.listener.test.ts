@@ -61,6 +61,9 @@ describe('messageCreateProxy function', () => {
             guildId: 'guild789',
             attachments: [],
             channel: { id: 'channel456', isTextBased: () => true } as any,
+            guild: {
+                members: { fetch: vi.fn() }
+            } as any,
         } as unknown as Message<boolean>;
 
         mockChannelProxy = {
@@ -70,6 +73,7 @@ describe('messageCreateProxy function', () => {
         };
 
         vi.mocked(DiscordChannelProxy).mockImplementation(() => mockChannelProxy as DiscordChannelProxy);
+        vi.mocked(mockMessage.guild!.members.fetch).mockResolvedValue({} as any); // Mock successful member fetch
     });
 
     it('should skip bot messages', async () => {
@@ -165,7 +169,7 @@ describe('messageCreateProxy function', () => {
 
         expect(matchAlias).toHaveBeenCalledWith('user123', 'n:text hello world');
         expect(formRepo.getById).toHaveBeenCalledWith('form1');
-        expect(validateUserChannelPerms).toHaveBeenCalledWith('user123', expect.any(Object), []);
+        expect(validateUserChannelPerms).toHaveBeenCalledWith('user123', expect.any(Object), expect.any(Array), expect.any(Object));
         expect(DiscordChannelProxy).not.toHaveBeenCalled();
         expect(proxyCoordinator).not.toHaveBeenCalled();
     });
@@ -226,6 +230,9 @@ describe('messageCreateProxy function', () => {
 
         // Verify reuploadAttachments was called with Discord attachment format
         expect(reuploadAttachments).toHaveBeenCalledWith(mockDiscordAttachments);
+
+        // Verify validateUserChannelPerms was called with attachments
+        expect(validateUserChannelPerms).toHaveBeenCalledWith('user123', expect.any(Object), expect.any(Array), expect.any(Object));
 
         // Verify proxyCoordinator was called with ProxyAttachment format
         expect(proxyCoordinator).toHaveBeenCalledWith(
@@ -325,5 +332,97 @@ describe('messageCreateProxy function', () => {
         await expect(messageCreateProxy(mockMessage)).resolves.toBeUndefined();
 
         expect(proxyCoordinator).not.toHaveBeenCalled();
+    });
+
+    it('should handle member fetch failure gracefully', async () => {
+        const mockMatch = {
+            alias: {
+                id: 'alias1',
+                userId: 'user123',
+                formId: 'form1',
+                triggerRaw: 'n:text',
+                triggerNorm: 'n:text',
+                kind: 'prefix' as const,
+                createdAt: new Date(),
+            },
+            renderedText: 'hello world',
+        };
+
+        const mockForm = {
+            id: 'form1',
+            userId: 'user123',
+            name: 'Neoli',
+            avatarUrl: 'https://example.com/avatar.png',
+            createdAt: new Date(),
+        };
+
+        vi.mocked(matchAlias).mockResolvedValue(mockMatch);
+        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
+        vi.mocked(mockMessage.guild!.members.fetch).mockRejectedValue(new Error('Member fetch error'));
+
+        // Should not throw
+        await expect(messageCreateProxy(mockMessage)).resolves.toBeUndefined();
+
+        expect(proxyCoordinator).not.toHaveBeenCalled();
+    });
+
+    it('should handle attachment reupload failure gracefully', async () => {
+        const mockMatch = {
+            alias: {
+                id: 'alias1',
+                userId: 'user123',
+                formId: 'form1',
+                triggerRaw: 'n:text',
+                triggerNorm: 'n:text',
+                kind: 'prefix' as const,
+                createdAt: new Date(),
+            },
+            renderedText: 'hello world',
+        };
+
+        const mockForm = {
+            id: 'form1',
+            userId: 'user123',
+            name: 'Neoli',
+            avatarUrl: null,
+            createdAt: new Date(),
+        };
+
+        const mockDiscordAttachments = [
+            {
+                id: 'att1',
+                url: 'https://example.com/file.png',
+                name: 'file.png',
+            },
+        ];
+
+        (mockMessage.attachments as unknown) = mockDiscordAttachments.map(att => ({
+            ...att,
+            toJSON: () => att,
+        }));
+
+        vi.mocked(matchAlias).mockResolvedValue(mockMatch);
+        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
+        vi.mocked(validateUserChannelPerms).mockResolvedValue(true);
+        vi.mocked(reuploadAttachments).mockRejectedValue(new Error('Reupload failed'));
+        vi.mocked(proxyCoordinator).mockResolvedValue({
+            webhookId: 'webhook123',
+            token: 'token456',
+            messageId: 'msg789',
+        });
+
+        await messageCreateProxy(mockMessage);
+
+        // Should still call proxyCoordinator with empty attachments
+        expect(proxyCoordinator).toHaveBeenCalledWith(
+            'user123',
+            'form1',
+            'channel456',
+            'guild789',
+            'hello world',
+            mockChannelProxy,
+            [], // Empty attachments due to failure
+            undefined
+        );
     });
 });
