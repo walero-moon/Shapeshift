@@ -35,6 +35,16 @@ describe('reuploadAttachments', () => {
     it('should return empty array for no attachments', async () => {
         const result = await reuploadAttachments([]);
         expect(result).toEqual([]);
+
+        expect(mockLog.debug).toHaveBeenCalledWith(
+            'No attachments to reupload',
+            expect.objectContaining({
+                component: 'utils',
+                stage: 'attachments',
+                durationMs: 0,
+                status: 'attachment_noop'
+            })
+        );
     });
 
     it('should successfully download attachment using buffer', async () => {

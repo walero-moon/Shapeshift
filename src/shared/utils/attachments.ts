@@ -8,7 +8,6 @@ interface DiscordAttachment {
 import { Readable } from 'node:stream';
 import { retryAsync } from './retry';
 import { log } from './logger';
-import { handleDegradedModeError } from './errorHandling';
 
 /**
  * Re-uploads Discord attachments by downloading them and returning as streams or buffers
@@ -17,6 +16,12 @@ import { handleDegradedModeError } from './errorHandling';
  */
 export async function reuploadAttachments(attachments: DiscordAttachment[]): Promise<Array<{ name: string; data: Buffer | Readable }>> {
     if (attachments.length === 0) {
+        log.debug('No attachments to reupload', {
+            component: 'utils',
+            stage: 'attachments',
+            durationMs: 0,
+            status: 'attachment_noop'
+        });
         return [];
     }
 

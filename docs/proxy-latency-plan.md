@@ -151,6 +151,42 @@ Cut the perceived delay between the user’s message and the proxied webhook mes
    - *Tests*: n/a (doc change).
    - *Acceptance*: Doc reflects final behavior; manual test instructions include attachment/reply flows.
 
+## 9. Beyond Option B – Additional Optimizations
+
+To push p90 latency below ~200 ms without new infrastructure (no Redis), tackle the remaining synchronous costs:
+
+1. **True no-op when no attachments**
+   - Confirm `reuploadAttachments` short-circuits immediately; avoid spinning up promises or logging work when `attachments.length === 0`.
+   - Acceptance: Stage logs show attachment duration ≈0 ms for text-only messages.
+
+2. **In-memory TTL cache for alias lists**
+   - Introduce a lightweight `Map<userId, { aliases, expiresAt }>` inside `MatchAlias`.
+   - Invalidate cache entries when `/alias add` or `/alias remove` mutate data.
+   - Acceptance: Cache hit rate logged; DB queries per proxied message drop for repeat users; tests cover cache eviction on mutation.
+
+3. **Short-lived form cache**
+   - Similar TTL map in `FormRepo` or higher-level helper keyed by `(userId, formId)`.
+   - Used by both `/send` and proxy listener to avoid repeated Postgres hits.
+   - Acceptance: Verified via tests or instrumentation that form lookups use cache when available; fallback on cache miss.
+
+4. **Inline alias prefix evaluation**
+   - Precompute alias prefix tokens when caching to avoid `split('text')` on every match.
+   - Acceptance: Profiling shows lower CPU per match; unit tests still cover pattern parsing.
+
+5. **Early bail-outs**
+   - Skip all heavy work when content length < minimal alias prefix or message lacks any colon/brace marker (fast heuristics).
+   - Acceptance: Listener logs show stage durations near-zero for messages that clearly cannot match.
+
+6. **Background persistence**
+   - After webhook send, enqueue `proxiedMessageRepo.insert` via `handleDegradedModeError` (fire-and-forget) so DB write no longer blocks the response path.
+   - Acceptance: Insert still happens (logged), but stage timing for proxy send stops waiting on DB.
+
+7. **Attachment follow-up edits (optional)**
+   - For very large attachments, consider sending text immediately, uploading files in parallel, then editing the webhook with attachments once available.
+   - Requires UX approval; track stage metrics carefully.
+
+Measure after each change; keep stage instrumentation to verify progress toward <200 ms.
+
 ---
 
 *Last updated:* <!-- update when implementing -->

@@ -325,38 +325,14 @@ export async function messageCreateProxy(message: Message) {
             status: 'proxy_success'
         });
 
-        // Delete the original user message after successful proxying
-        const deleteStart = performance.now();
-        await handleDegradedModeError(
-            async () => {
-                await message.delete();
-                const deleteDuration = performance.now() - deleteStart;
-                log.debug('Proxy stage complete', {
-                    stage: 'delete',
-                    durationMs: deleteDuration,
-                    component: 'proxy',
-                    userId: message.author.id,
-                    guildId: message.guildId || undefined,
-                    channelId: message.channelId
-                });
-                log.debug('Original message deleted after successful proxy', {
-                    component: 'proxy',
-                    userId: message.author.id,
-                    guildId: message.guildId || undefined,
-                    channelId: message.channelId,
-                    status: 'original_message_deleted'
-                });
-            },
-            {
-                component: 'proxy',
-                userId: message.author.id,
-                guildId: message.guildId || undefined,
-                channelId: message.channelId,
-                status: 'degraded_mode_fallback'
-            },
-            undefined,
-            'Failed to delete original message after proxy'
-        );
+        // Delete the original user message after successful proxying (fire-and-forget)
+        void handleDegradedModeError(() => message.delete(), {
+            component: 'proxy',
+            userId: message.author.id,
+            guildId: message.guildId || undefined,
+            channelId: message.channelId,
+            status: 'degraded_mode_fallback'
+        }, undefined, 'delete proxied source');
 
         // Log total proxy operation duration
         const totalDuration = performance.now() - proxyStart;

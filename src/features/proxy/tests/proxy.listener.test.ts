@@ -39,6 +39,10 @@ vi.mock('../../../shared/utils/logger', () => ({
     },
 }));
 
+vi.mock('../../../shared/utils/errorHandling', () => ({
+    handleDegradedModeError: vi.fn(),
+}));
+
 // Import after mocking
 import { matchAlias } from '../../../features/proxy/app/MatchAlias';
 import { validateUserChannelPerms } from '../../../features/proxy/app/ValidateUserChannelPerms';
@@ -46,6 +50,7 @@ import { proxyCoordinator } from '../../../features/proxy/app/ProxyCoordinator';
 import { formRepo } from '../../../features/identity/infra/FormRepo';
 import { DiscordChannelProxy } from '../../../adapters/discord/DiscordChannelProxy';
 import { reuploadAttachments } from '../../../shared/utils/attachments';
+import { handleDegradedModeError } from '../../../shared/utils/errorHandling';
 
 describe('messageCreateProxy function', () => {
     let mockMessage: Message<boolean>;
@@ -64,6 +69,7 @@ describe('messageCreateProxy function', () => {
             guild: {
                 members: { fetch: vi.fn() }
             } as any,
+            delete: vi.fn().mockResolvedValue(undefined),
         } as unknown as Message<boolean>;
 
         mockChannelProxy = {
@@ -74,6 +80,9 @@ describe('messageCreateProxy function', () => {
 
         vi.mocked(DiscordChannelProxy).mockImplementation(() => mockChannelProxy as DiscordChannelProxy);
         vi.mocked(mockMessage.guild!.members.fetch).mockResolvedValue({} as any); // Mock successful member fetch
+        vi.mocked(handleDegradedModeError).mockImplementation(async (fn) => {
+            await fn(); // Execute the function for testing
+        });
     });
 
     it('should skip bot messages', async () => {
@@ -137,6 +146,19 @@ describe('messageCreateProxy function', () => {
         expect(matchAlias).toHaveBeenCalledWith('user123', 'n:text hello world');
         expect(formRepo.getById).toHaveBeenCalledWith('form1');
         expect(validateUserChannelPerms).toHaveBeenCalledWith('user123', expect.any(Object), [], expect.any(Object));
+        expect(handleDegradedModeError).toHaveBeenCalledWith(
+            expect.any(Function),
+            {
+                component: 'proxy',
+                userId: 'user123',
+                guildId: 'guild789',
+                channelId: 'channel456',
+                status: 'degraded_mode_fallback'
+            },
+            undefined,
+            'delete proxied source'
+        );
+        expect(mockMessage.delete).toHaveBeenCalled();
     });
 
     it('should skip proxying if user lacks permissions', async () => {
