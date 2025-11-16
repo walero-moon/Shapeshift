@@ -19,6 +19,10 @@ vi.mock('../../../features/proxy/app/ProxyCoordinator', () => ({
 
 vi.mock('../../../shared/utils/attachments', () => ({
     reuploadAttachments: vi.fn(),
+    splitAttachmentsBySize: vi.fn((attachments) => ({
+        small: attachments,
+        large: [],
+    })),
 }));
 
 vi.mock('../../../features/identity/infra/FormRepo', () => ({
@@ -68,7 +72,10 @@ describe('messageCreateProxy function', () => {
             content: 'n:text hello world',
             channelId: 'channel456',
             guildId: 'guild789',
-            attachments: [],
+            attachments: {
+                size: 0,
+                values: () => [][Symbol.iterator](),
+            },
             channel: { id: 'channel456', isTextBased: () => true } as any,
             guild: {
                 members: { fetch: vi.fn() }
@@ -101,42 +108,6 @@ describe('messageCreateProxy function', () => {
         await messageCreateProxy(mockMessage);
 
         expect(matchAlias).not.toHaveBeenCalled();
-    });
-
-    it('should skip messages that are too short for alias prefixes', async () => {
-        mockMessage.content = 'hi'; // length 2 < 6
-
-        await messageCreateProxy(mockMessage);
-
-        expect(matchAlias).not.toHaveBeenCalled();
-        expect(log.debug).toHaveBeenCalledWith('Early bail-out: message too short or lacks alias markers', expect.objectContaining({
-            component: 'proxy',
-            userId: 'user123',
-            guildId: 'guild789',
-            channelId: 'channel456',
-            contentLength: 2,
-            hasColon: false,
-            hasBrace: false,
-            status: 'early_bailout'
-        }));
-    });
-
-    it('should skip messages that lack colon or brace markers', async () => {
-        mockMessage.content = 'hello world'; // length 11, no : or {
-
-        await messageCreateProxy(mockMessage);
-
-        expect(matchAlias).not.toHaveBeenCalled();
-        expect(log.debug).toHaveBeenCalledWith('Early bail-out: message too short or lacks alias markers', expect.objectContaining({
-            component: 'proxy',
-            userId: 'user123',
-            guildId: 'guild789',
-            channelId: 'channel456',
-            contentLength: 11,
-            hasColon: false,
-            hasBrace: false,
-            status: 'early_bailout'
-        }));
     });
 
     it('should skip messages that do not match any alias', async () => {
@@ -259,13 +230,15 @@ describe('messageCreateProxy function', () => {
             createdAt: new Date(),
         };
 
-        const mockDiscordAttachments = [
-            {
-                id: 'att1',
-                url: 'https://example.com/file.png',
-                name: 'file.png',
-            },
-        ];
+        const attachmentEntity = {
+            id: 'att1',
+            url: 'https://example.com/file.png',
+            name: 'file.png',
+            size: 1024,
+        };
+        const attachmentCollection = new Map<string, typeof attachmentEntity>([
+            [attachmentEntity.id, attachmentEntity],
+        ]);
 
         const mockReuploadedAttachments: ProxyAttachment[] = [
             {
@@ -274,13 +247,13 @@ describe('messageCreateProxy function', () => {
             },
         ];
 
-        (mockMessage.attachments as unknown) = mockDiscordAttachments.map(att => ({
-            ...att,
-            toJSON: () => att,
-        }));
+        (mockMessage.attachments as unknown) = {
+            size: attachmentCollection.size,
+            values: () => attachmentCollection.values(),
+        };
 
         vi.mocked(matchAlias).mockResolvedValue(mockMatch);
-        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
+        vi.mocked(formRepo.getCachedByUserAndId).mockResolvedValue(mockForm);
         vi.mocked(validateUserChannelPerms).mockResolvedValue(true);
         vi.mocked(reuploadAttachments).mockResolvedValue(mockReuploadedAttachments as any);
         vi.mocked(proxyCoordinator).mockResolvedValue({
@@ -292,7 +265,14 @@ describe('messageCreateProxy function', () => {
         await messageCreateProxy(mockMessage);
 
         // Verify reuploadAttachments was called with Discord attachment format
-        expect(reuploadAttachments).toHaveBeenCalledWith(mockDiscordAttachments);
+        expect(reuploadAttachments).toHaveBeenCalledWith([
+            expect.objectContaining({
+                id: 'att1',
+                url: 'https://example.com/file.png',
+                name: 'file.png',
+                size: 1024,
+            })
+        ]);
 
         // Verify validateUserChannelPerms was called with attachments
         expect(validateUserChannelPerms).toHaveBeenCalledWith('user123', expect.any(Object), expect.any(Array), expect.any(Object));
@@ -306,7 +286,9 @@ describe('messageCreateProxy function', () => {
             'hello world',
             mockChannelProxy,
             mockReuploadedAttachments,
-            undefined
+            undefined,
+            mockForm,
+            null
         );
     });
 
@@ -326,7 +308,7 @@ describe('messageCreateProxy function', () => {
         };
 
         vi.mocked(matchAlias).mockResolvedValue(mockMatch);
-        vi.mocked(formRepo.getById).mockResolvedValue(null);
+        vi.mocked(formRepo.getCachedByUserAndId).mockResolvedValue(null);
 
         await messageCreateProxy(mockMessage);
 
@@ -357,7 +339,7 @@ describe('messageCreateProxy function', () => {
         };
 
         vi.mocked(matchAlias).mockResolvedValue(mockMatch);
-        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
+        vi.mocked(formRepo.getCachedByUserAndId).mockResolvedValue(mockForm);
         vi.mocked(validateUserChannelPerms).mockResolvedValue(true);
         vi.mocked(proxyCoordinator).mockRejectedValue(new Error('Webhook failed'));
 
@@ -392,7 +374,7 @@ describe('messageCreateProxy function', () => {
         };
 
         vi.mocked(matchAlias).mockResolvedValue(mockMatch);
-        vi.mocked(formRepo.getById).mockRejectedValue(new Error('Database error'));
+        vi.mocked(formRepo.getCachedByUserAndId).mockRejectedValue(new Error('Database error'));
 
         // Should not throw
         await expect(messageCreateProxy(mockMessage)).resolves.toBeUndefined();
@@ -424,7 +406,7 @@ describe('messageCreateProxy function', () => {
         };
 
         vi.mocked(matchAlias).mockResolvedValue(mockMatch);
-        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
+        vi.mocked(formRepo.getCachedByUserAndId).mockResolvedValue(mockForm);
         vi.mocked(mockMessage.guild!.members.fetch).mockRejectedValue(new Error('Member fetch error'));
 
         // Should not throw
@@ -456,21 +438,23 @@ describe('messageCreateProxy function', () => {
             createdAt: new Date(),
         };
 
-        const mockDiscordAttachments = [
-            {
-                id: 'att1',
-                url: 'https://example.com/file.png',
-                name: 'file.png',
-            },
-        ];
+        const failureAttachment = {
+            id: 'att1',
+            url: 'https://example.com/file.png',
+            name: 'file.png',
+            size: 512,
+        };
+        const failureCollection = new Map<string, typeof failureAttachment>([
+            [failureAttachment.id, failureAttachment],
+        ]);
 
-        (mockMessage.attachments as unknown) = mockDiscordAttachments.map(att => ({
-            ...att,
-            toJSON: () => att,
-        }));
+        (mockMessage.attachments as unknown) = {
+            size: failureCollection.size,
+            values: () => failureCollection.values(),
+        };
 
         vi.mocked(matchAlias).mockResolvedValue(mockMatch);
-        vi.mocked(formRepo.getById).mockResolvedValue(mockForm);
+        vi.mocked(formRepo.getCachedByUserAndId).mockResolvedValue(mockForm);
         vi.mocked(validateUserChannelPerms).mockResolvedValue(true);
         vi.mocked(reuploadAttachments).mockRejectedValue(new Error('Reupload failed'));
         vi.mocked(proxyCoordinator).mockResolvedValue({
@@ -490,7 +474,9 @@ describe('messageCreateProxy function', () => {
             'hello world',
             mockChannelProxy,
             [], // Empty attachments due to failure
-            undefined
+            undefined,
+            mockForm,
+            null
         );
     });
 });

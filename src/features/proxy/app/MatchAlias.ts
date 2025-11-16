@@ -9,6 +9,23 @@ export interface CachedAlias extends Alias {
     suffix?: string;
 }
 
+function toCachedAlias(alias: Alias): CachedAlias {
+    const normalized = alias.triggerNorm;
+    const textIndex = normalized.indexOf('text');
+    if (textIndex === -1) {
+        return { ...alias, prefix: '' };
+    }
+
+    const prefix = normalized.slice(0, textIndex);
+    const suffix = normalized.slice(textIndex + 4);
+
+    if (alias.kind === 'pattern') {
+        return { ...alias, prefix, suffix };
+    }
+
+    return { ...alias, prefix };
+}
+
 /**
  * In-memory TTL cache for alias lists per userId
  */
@@ -83,16 +100,7 @@ export async function matchAlias(userId: string, text: string): Promise<MatchRes
             // Cache miss or expired, fetch from DB
             const groupedAliases = await aliasRepo.listByUserGrouped(userId);
             const rawAliases = Object.values(groupedAliases).flat();
-            aliases = rawAliases.map(alias => {
-                const parts = alias.triggerNorm.split('text');
-                const prefix = parts[0] ?? '';
-                if (alias.kind === 'pattern') {
-                    const suffix = parts[1] ?? '';
-                    return { ...alias, prefix, suffix };
-                } else {
-                    return { ...alias, prefix };
-                }
-            });
+            aliases = rawAliases.map(toCachedAlias);
             aliasCache.set(userId, { aliases, expiresAt: Date.now() + TTL });
             const hitRate = cacheStats.hits / cacheStats.total;
             log.info('Cache miss for alias list', {
@@ -103,6 +111,9 @@ export async function matchAlias(userId: string, text: string): Promise<MatchRes
             });
         }
 
+        // Lowercase input once for comparisons
+        const lowerText = text.toLowerCase();
+
         // Separate prefix and pattern aliases
         const prefixAliases = aliases.filter(alias => alias.kind === 'prefix');
         const patternAliases = aliases.filter(alias => alias.kind === 'pattern');
@@ -112,10 +123,8 @@ export async function matchAlias(userId: string, text: string): Promise<MatchRes
             let bestMatch: CachedAlias | null = null;
             let longestPrefixLength = 0;
 
-            const lowerText = text.toLowerCase();
-
             for (const alias of prefixAliases) {
-                const prefix = alias.prefix;
+                const prefix = alias.prefix ?? '';
                 if (lowerText.startsWith(prefix)) {
                     if (prefix.length > longestPrefixLength) {
                         bestMatch = alias;
@@ -127,7 +136,7 @@ export async function matchAlias(userId: string, text: string): Promise<MatchRes
             if (bestMatch) {
                 // Extract rendered text: everything after prefix, remove leading "text", trim
                 const afterPrefix = text.slice(longestPrefixLength);
-                const renderedText = afterPrefix.replace(/^text/, '').trim();
+                const renderedText = afterPrefix.replace(/^text/i, '').trim();
 
                 const duration = Date.now() - start;
                 log.info('Alias matched successfully', {
@@ -149,13 +158,11 @@ export async function matchAlias(userId: string, text: string): Promise<MatchRes
 
         // If no prefix match, try pattern aliases
         for (const alias of patternAliases) {
-            if (alias.suffix === undefined) continue; // Should not happen
-
-            const prefix = alias.prefix;
-            const suffix = alias.suffix;
+            const prefix = alias.prefix ?? '';
+            const suffix = alias.suffix ?? '';
 
             // Check if text matches the pattern structure
-            if (text.startsWith(prefix) && text.endsWith(suffix) && text.length > prefix.length + suffix.length) {
+            if (lowerText.startsWith(prefix) && lowerText.endsWith(suffix) && lowerText.length > prefix.length + suffix.length) {
                 // Extract content between prefix and suffix
                 const contentStart = prefix.length;
                 const contentEnd = text.length - suffix.length;

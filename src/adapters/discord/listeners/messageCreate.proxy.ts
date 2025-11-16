@@ -56,21 +56,6 @@ export async function messageCreateProxy(message: Message) {
         return;
     }
 
-    // Early bail-out: skip if content is too short for alias prefixes or lacks colon/brace markers
-    if (message.content.length < 6 || (!message.content.includes(':') && !message.content.includes('{'))) {
-        log.debug('Early bail-out: message too short or lacks alias markers', {
-            component: 'proxy',
-            userId: message.author.id,
-            guildId: message.guildId || undefined,
-            channelId: message.channelId,
-            contentLength: message.content.length,
-            hasColon: message.content.includes(':'),
-            hasBrace: message.content.includes('{'),
-            status: 'early_bailout'
-        });
-        return;
-    }
-
     log.debug('Processing guild message for proxying', {
         component: 'proxy',
         userId: message.author.id,
@@ -86,36 +71,25 @@ export async function messageCreateProxy(message: Message) {
         const parallelStart = performance.now();
         const promises: Promise<{ type: string; value: any }>[] = [];
 
-        // Match alias
-        promises.push(
-            handleDegradedModeError(
-                () => matchAlias(message.author.id, message.content),
-                {
-                    component: 'proxy',
-                    userId: message.author.id,
-                    guildId: message.guildId || undefined,
-                    channelId: message.channelId,
-                    status: 'degraded_mode_fallback'
-                },
-                null,
-                'Failed to match alias'
-            ).then(match => ({ type: 'match', value: match }))
+        const matchPromise = handleDegradedModeError(
+            () => matchAlias(message.author.id, message.content),
+            {
+                component: 'proxy',
+                userId: message.author.id,
+                guildId: message.guildId || undefined,
+                channelId: message.channelId,
+                status: 'degraded_mode_fallback'
+            },
+            null,
+            'Failed to match alias'
         );
+
+        // Match alias
+        promises.push(matchPromise.then(match => ({ type: 'match', value: match })));
 
         // Form fetch (will be resolved after match)
         promises.push(
-            handleDegradedModeError(
-                () => matchAlias(message.author.id, message.content),
-                {
-                    component: 'proxy',
-                    userId: message.author.id,
-                    guildId: message.guildId || undefined,
-                    channelId: message.channelId,
-                    status: 'degraded_mode_fallback'
-                },
-                null,
-                'Failed to match alias for form'
-            ).then(async (match) => {
+            matchPromise.then(async (match) => {
                 if (match) {
                     return handleDegradedModeError(
                         () => formRepo.getCachedByUserAndId(message.author.id, match.alias.formId),

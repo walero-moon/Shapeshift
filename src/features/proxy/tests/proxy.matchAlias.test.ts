@@ -106,7 +106,10 @@ describe('matchAlias function', () => {
         const result = await matchAlias('user1', 'neoli:text hello world');
 
         expect(result).toEqual({
-            alias: mockAliases[1], // longest match
+            alias: expect.objectContaining({
+                id: 'alias2',
+                triggerNorm: 'neoli:text',
+            }),
             renderedText: 'hello world',
         });
         expect(aliasRepo.listByUserGrouped).toHaveBeenCalledWith('user1');
@@ -130,7 +133,7 @@ describe('matchAlias function', () => {
         const result = await matchAlias('user1', 'n:text   hello   world   ');
 
         expect(result).toEqual({
-            alias: mockAliases[0],
+            alias: expect.objectContaining({ id: 'alias1' }),
             renderedText: 'hello   world',
         });
         expect(aliasRepo.listByUserGrouped).toHaveBeenCalledWith('user1');
@@ -154,7 +157,7 @@ describe('matchAlias function', () => {
         const result = await matchAlias('user1', 'n:text');
 
         expect(result).toEqual({
-            alias: mockAliases[0],
+            alias: expect.objectContaining({ id: 'alias1' }),
             renderedText: '',
         });
         expect(aliasRepo.listByUserGrouped).toHaveBeenCalledWith('user1');
@@ -178,8 +181,32 @@ describe('matchAlias function', () => {
         const result = await matchAlias('user1', 'n:text hello world');
 
         expect(result).toEqual({
-            alias: mockAliases[0],
+            alias: expect.objectContaining({ id: 'alias1' }),
             renderedText: 'hello world',
+        });
+        expect(aliasRepo.listByUserGrouped).toHaveBeenCalledWith('user1');
+    });
+
+    it('should strip literal TEXT regardless of casing', async () => {
+        const mockAliases = [
+            {
+                id: 'alias1',
+                userId: 'user1',
+                formId: 'form1',
+                triggerRaw: 'N:TEXT',
+                triggerNorm: 'n:text',
+                kind: 'prefix' as const,
+                createdAt: new Date(),
+            },
+        ];
+        const groupedAliases = { 'form1': mockAliases };
+        vi.mocked(aliasRepo.listByUserGrouped).mockResolvedValue(groupedAliases);
+
+        const result = await matchAlias('user1', 'N:TEXT Shouty');
+
+        expect(result).toEqual({
+            alias: expect.objectContaining({ id: 'alias1' }),
+            renderedText: 'Shouty',
         });
         expect(aliasRepo.listByUserGrouped).toHaveBeenCalledWith('user1');
     });
@@ -203,10 +230,7 @@ describe('matchAlias function', () => {
 
         const result = await matchAlias('user1', 'n:trigger hello world');
 
-        expect(result).toEqual({
-            alias: mockAliases[0],
-            renderedText: 'hello world',
-        }); // Matches because the function doesn't validate 'text' presence - that's done at creation time
+        expect(result).toBeNull(); // Alias without literal "text" should never match
         expect(aliasRepo.listByUserGrouped).toHaveBeenCalledWith('user1');
     });
 
@@ -228,7 +252,7 @@ describe('matchAlias function', () => {
         const result = await matchAlias('user1', '{hello world}');
 
         expect(result).toEqual({
-            alias: mockAliases[0],
+            alias: expect.objectContaining({ id: 'alias1' }),
             renderedText: 'hello world',
         });
         expect(aliasRepo.listByUserGrouped).toHaveBeenCalledWith('user1');
@@ -283,7 +307,7 @@ describe('matchAlias function', () => {
         const result = await matchAlias('user1', 'n:text hello world');
 
         expect(result).toEqual({
-            alias: prefixAlias,
+            alias: expect.objectContaining({ id: 'alias1' }),
             renderedText: 'hello world',
         });
         expect(aliasRepo.listByUserGrouped).toHaveBeenCalledWith('user1');
