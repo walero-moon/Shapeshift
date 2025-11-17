@@ -30,7 +30,7 @@ describe('proxyAs context command', () => {
             targetMessage: {
                 id: 'message-123',
                 content: 'Hello world',
-                author: { bot: false, system: false },
+                author: { bot: false, system: false, id: 'user-123' },
                 attachments: [],
             },
             user: { id: 'user-123' },
@@ -122,6 +122,19 @@ describe('proxyAs context command', () => {
                 allowedMentions: expect.any(Object)
             });
         });
+
+        it('should reject messages not owned by the invoking user', async () => {
+            mockContextInteraction.targetMessage.author.id = 'another-user';
+
+            await proxyAsContextCommand.execute(mockContextInteraction);
+
+            expect(mockContextInteraction.reply).toHaveBeenCalledWith({
+                content: '❌ You can only proxy messages you originally sent.',
+                flags: MessageFlags.Ephemeral,
+                allowedMentions: expect.any(Object)
+            });
+            expect(mockContextInteraction.showModal).not.toHaveBeenCalled();
+        });
     });
 
     describe('handleProxyAsModalSubmit', () => {
@@ -139,7 +152,7 @@ describe('proxyAs context command', () => {
             const mockFetchedMessage = {
                 id: 'message-123',
                 content: 'Hello world',
-                author: { bot: false, system: false },
+                author: { bot: false, system: false, id: 'user-123' },
                 attachments: []
             };
 
@@ -196,7 +209,7 @@ describe('proxyAs context command', () => {
             (mockModalInteraction.channel!.messages.fetch as Mock).mockResolvedValue({
                 id: 'message-123',
                 content: 'Hello world',
-                author: { bot: false, system: false },
+                author: { bot: false, system: false, id: 'user-123' },
                 attachments: []
             });
             (mockModalInteraction.fields.getTextInputValue as Mock)
@@ -234,7 +247,7 @@ describe('proxyAs context command', () => {
             const mockFetchedMessage = {
                 id: 'message-123',
                 content: 'Hello world',
-                author: { bot: false, system: false },
+                author: { bot: false, system: false, id: 'user-123' },
                 attachments: [],
                 delete: vi.fn()
             };
@@ -299,7 +312,7 @@ describe('proxyAs context command', () => {
             (mockModalInteraction.channel!.messages.fetch as Mock).mockResolvedValue({
                 id: 'message-123',
                 content: 'Hello world',
-                author: { bot: false, system: false },
+                author: { bot: false, system: false, id: 'user-123' },
                 attachments: []
             });
             (mockModalInteraction.fields.getTextInputValue as Mock)
@@ -321,6 +334,38 @@ describe('proxyAs context command', () => {
                     interactionId: mockModalInteraction.id
                 }),
                 expect.stringContaining('Proxy failed')
+            );
+        });
+
+        it('should error when user does not own the fetched message', async () => {
+            const mockForms = [
+                { id: 'form-1', name: 'Test Form', avatarUrl: null, createdAt: new Date(), aliases: [] }
+            ];
+
+            vi.mocked(listForms).mockResolvedValue(mockForms);
+            (mockModalInteraction.channel!.messages.fetch as Mock).mockResolvedValue({
+                id: 'message-123',
+                content: 'Hello world',
+                author: { bot: false, system: false, id: 'another-user' },
+                attachments: []
+            });
+            (mockModalInteraction.fields.getTextInputValue as Mock).mockImplementation((field: string) => {
+                if (field === 'form_id') return 'Test Form';
+                if (field === 'delete_original') return 'no';
+                return '';
+            });
+
+            await handleProxyAsModalSubmit(mockModalInteraction);
+
+            expect(handleInteractionError).toHaveBeenCalledWith(
+                mockModalInteraction,
+                expect.any(Error),
+                expect.objectContaining({
+                    component: 'proxy-context',
+                    userId: 'user-123',
+                    interactionId: mockModalInteraction.id
+                }),
+                expect.stringContaining('originally sent')
             );
         });
     });

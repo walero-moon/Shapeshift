@@ -24,14 +24,19 @@ vi.mock('../../../shared/utils/errorHandling', () => ({
     handleInteractionError: vi.fn()
 }));
 
-vi.mock('../../../shared/utils/logger', () => ({
-    log: {
+vi.mock('../../../shared/utils/logger', () => {
+    const mockLogger = {
         info: vi.fn(),
         error: vi.fn(),
         warn: vi.fn(),
-        debug: vi.fn()
-    }
-}));
+        debug: vi.fn(),
+        child: vi.fn().mockReturnThis()
+    };
+    return {
+        log: mockLogger,
+        default: mockLogger
+    };
+});
 
 const baseRecord = {
     id: 'record-1',

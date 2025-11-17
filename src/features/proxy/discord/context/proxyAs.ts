@@ -65,6 +65,21 @@ export const proxyAsContextCommand = {
             return;
         }
 
+        const targetOwnerId = targetMessage.author?.id ?? null;
+        if (!targetOwnerId || targetOwnerId !== interaction.user.id) {
+            log.warn('Proxy-as attempted on message not owned by user', {
+                ...baseContext,
+                ownerId: targetOwnerId,
+                status: 'context_not_owner'
+            });
+            await interaction.reply({
+                content: '❌ You can only proxy messages you originally sent.',
+                flags: MessageFlags.Ephemeral,
+                allowedMentions: DEFAULT_ALLOWED_MENTIONS
+            });
+            return;
+        }
+
         // Get user's forms
         const forms = await listForms(interaction.user.id);
         if (forms.length === 0) {
@@ -170,6 +185,11 @@ export async function handleProxyAsModalSubmit(interaction: ModalSubmitInteracti
         // Validate again (in case it changed)
         if (targetMessage.author.bot || targetMessage.author.system) {
             throw new Error('Cannot proxy bot or system messages.');
+        }
+
+        const ownerId = targetMessage.author?.id ?? null;
+        if (!ownerId || ownerId !== interaction.user.id) {
+            throw new Error('You can only proxy messages you originally sent.');
         }
 
         // Find form by name

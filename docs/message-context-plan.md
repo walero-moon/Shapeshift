@@ -76,4 +76,31 @@ Deliver the four promised message-context actions—**Proxy as…**, **Edit prox
 
 ---
 
-*Last updated:* 2025-03-17 YYY-MM-DD placeholder; replace on implementation.
+## 4. Documentation & Manual Verification Checklist
+
+These notes satisfy Task 9 by telling contributors how to ship and validate the message-context tooling:
+
+1. **Command registration**
+   - Run `pnpm deploy:guild` after changing any context handler or adding new ones. Guild deployments finish instantly and make the four context items visible in the dev server.
+   - Commands live at `src/features/proxy/discord/context/*` and are registered in `src/adapters/discord/register-commands.ts`.
+
+2. **Manual smoke test (run in a staging guild)**
+   1. Pick a user message and use **Proxy as…**
+      - Confirm the modal opens, form list reflects the user’s forms, and the proxied webhook message posts with optional source deletion.
+   2. Use **Edit proxied…** on the webhook message
+      - Modal should preload content, edits should apply, and no extra confirmation message should appear (only logs).
+   3. Use **Delete proxied…**
+      - Message should disappear; DB record should be removed (check via logs if DB unavailable).
+   4. Use **Who sent this?**
+      - Ephemeral embed must include original user mention, form name, timestamps, and jump links.
+   - During testing, tail the log for `component: "proxy-context"` entries to ensure the instrumentation reports `context_start`, `context_success`, or `context_error`.
+
+3. **Allowed mentions & timing**
+   - Each context handler acks within 3 s (either `reply()` or `deferReply()`).
+   - All follow-up/edit replies use `DEFAULT_ALLOWED_MENTIONS` unless a reply-style send deliberately enables mentions.
+
+4. **Documentation updates**
+   - Mention the context commands and verification steps in release notes/PR descriptions.
+   - Cross-link this checklist from `AGENTS.md` (Quality Gate section) so future agents know what “proof” is expected.
+
+*Last updated:* 2025-11-16

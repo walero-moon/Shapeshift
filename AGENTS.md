@@ -112,6 +112,8 @@ Before marking any task **complete**, you MUST verify all of the following:
    * `pnpm dev` runs; `/ping` in the dev guild replies **ephemerally** and **acknowledges within ~3s** (or defers first). ([Discord][5])
    * If you changed Discord interactions, verify **guild** command deploy works; don’t rely on slow global propagation. ([Discord][8])
 
+   *Context menus:* When touching the message-context features, re-run `pnpm deploy:guild` and manually exercise **Proxy as…**, **Edit proxied…**, **Delete proxied…**, and **Who sent this?** in the dev guild. Follow the checklist in `docs/message-context-plan.md#4-documentation--manual-verification-checklist` and confirm the structured logs (`component: "proxy-context"`) show `context_start` → `context_success` (or `context_error` when fault-injecting).
+
 4. **Functional proof**
 
    * If you added meaningful logic: provide **unit tests** *or* a manual E2E verification note. At minimum, run the application and prove the flow.
