@@ -32,5 +32,6 @@ export const proxiedMessages = pgTable('proxied_messages', {
     webhookId: text('webhook_id').notNull(),
     webhookToken: text('webhook_token').notNull(),
     messageId: text('message_id').notNull(),
+    sourceMessageId: text('source_message_id'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
 });

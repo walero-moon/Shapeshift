@@ -9,11 +9,19 @@ import log from './shared/utils/logger';
 import { command as formCommand } from './features/identity/discord/form';
 import { command as aliasCommand } from './features/identity/discord/alias';
 import { command as sendCommand } from './features/proxy/discord/send';
+import { proxyAsContextCommand } from './features/proxy/discord/context/proxyAs';
+import { editProxiedContextCommand } from './features/proxy/discord/context/editProxied';
+import { deleteProxiedContextCommand } from './features/proxy/discord/context/deleteProxied';
+import { whoSentThisContextCommand } from './features/proxy/discord/context/whoSentThis';
 
 registry.registerCommand(formCommand);
 registry.registerCommand(aliasCommand);
 registry.registerCommand(sendCommand);
 registry.registerCommand(pingCommand);
+registry.registerMessageCommand(proxyAsContextCommand);
+registry.registerMessageCommand(editProxiedContextCommand);
+registry.registerMessageCommand(deleteProxiedContextCommand);
+registry.registerMessageCommand(whoSentThisContextCommand);
 
 // Enhanced ready event with comprehensive logging
 client.once(Events.ClientReady, (readyClient) => {
@@ -92,6 +100,28 @@ client.on(Events.InteractionCreate, async (interaction) => {
             if (handler) {
                 await handler(interaction);
             }
+        } else if (interaction.isMessageContextMenuCommand()) {
+            const command = registry.getMessageCommand(interaction.commandName);
+            if (!command) {
+                interactionLogger.warn('Message context command not found', {
+                    route: interaction.commandName,
+                    status: 'not_found'
+                });
+                return;
+            }
+
+            interactionLogger.info('Executing message context command', {
+                route: interaction.commandName,
+                targetMessageId: interaction.targetId,
+                status: 'executing'
+            });
+
+            await command.execute(interaction);
+
+            interactionLogger.info('Message context command executed successfully', {
+                route: interaction.commandName,
+                status: 'success'
+            });
         }
     } catch (error) {
         interactionLogger.error(`Error executing interaction`, {

@@ -2,7 +2,16 @@ import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
 import { env } from '../../config/env';
 
-import { CommandInteraction, AutocompleteInteraction, ButtonInteraction, ModalSubmitInteraction, Message } from 'discord.js';
+import {
+    CommandInteraction,
+    AutocompleteInteraction,
+    ButtonInteraction,
+    ModalSubmitInteraction,
+    Message,
+    ContextMenuCommandBuilder,
+    ApplicationCommandType,
+    MessageContextMenuCommandInteraction
+} from 'discord.js';
 
 export interface Command {
     data: {
@@ -13,8 +22,14 @@ export interface Command {
     autocomplete?: (interaction: AutocompleteInteraction) => Promise<void>;
 }
 
+export interface MessageContextCommand {
+    data: ContextMenuCommandBuilder;
+    execute(interaction: MessageContextMenuCommandInteraction): Promise<void>;
+}
+
 export class CommandRegistry {
     private commands: Map<string, Command> = new Map();
+    private messageCommands: Map<string, MessageContextCommand> = new Map();
     private autocompleteHandlers: Map<string, (interaction: AutocompleteInteraction) => Promise<void>> = new Map();
     private buttonHandlers: Map<string, (interaction: ButtonInteraction) => Promise<void>> = new Map();
     private modalHandlers: Map<string, (interaction: ModalSubmitInteraction) => Promise<void>> = new Map();
@@ -32,6 +47,11 @@ export class CommandRegistry {
         this.commands.delete(name);
     }
 
+    registerMessageCommand(command: MessageContextCommand) {
+        command.data.setType(ApplicationCommandType.Message);
+        this.messageCommands.set(command.data.name, command);
+    }
+
     registerAutocomplete(commandName: string, handler: (interaction: AutocompleteInteraction) => Promise<void>) {
         this.autocompleteHandlers.set(commandName, handler);
     }
@@ -45,7 +65,10 @@ export class CommandRegistry {
     }
 
     async deployCommands(scope: 'guild' | 'global') {
-        const commands = Array.from(this.commands.values()).map(cmd => cmd.data.toJSON());
+        const commands = [
+            ...Array.from(this.commands.values()).map(cmd => cmd.data.toJSON()),
+            ...Array.from(this.messageCommands.values()).map(cmd => cmd.data.toJSON())
+        ];
 
         if (scope === 'guild') {
             await this.rest.put(
@@ -62,6 +85,10 @@ export class CommandRegistry {
 
     getCommand(name: string) {
         return this.commands.get(name);
+    }
+
+    getMessageCommand(name: string) {
+        return this.messageCommands.get(name);
     }
 
     getAutocompleteHandler(commandName: string) {
