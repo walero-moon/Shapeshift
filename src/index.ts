@@ -9,6 +9,7 @@ import log from './shared/utils/logger';
 import { command as formCommand } from './features/identity/discord/form';
 import { command as aliasCommand } from './features/identity/discord/alias';
 import { command as sendCommand } from './features/proxy/discord/send';
+import { command as shapeshiftCommand } from './features/proxy/discord/shapeshift';
 import { proxyAsContextCommand } from './features/proxy/discord/context/proxyAs';
 import { editProxiedContextCommand } from './features/proxy/discord/context/editProxied';
 import { deleteProxiedContextCommand } from './features/proxy/discord/context/deleteProxied';
@@ -17,6 +18,7 @@ import { whoSentThisContextCommand } from './features/proxy/discord/context/whoS
 registry.registerCommand(formCommand);
 registry.registerCommand(aliasCommand);
 registry.registerCommand(sendCommand);
+registry.registerCommand(shapeshiftCommand);
 registry.registerCommand(pingCommand);
 registry.registerMessageCommand(proxyAsContextCommand);
 registry.registerMessageCommand(editProxiedContextCommand);
@@ -92,6 +94,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
             }
         } else if (interaction.isButton()) {
             const handler = registry.getButtonHandler(interaction.customId);
+            if (handler) {
+                await handler(interaction);
+            }
+        } else if (interaction.isStringSelectMenu()) {
+            const handler = registry.getSelectHandler(interaction.customId);
             if (handler) {
                 await handler(interaction);
             }

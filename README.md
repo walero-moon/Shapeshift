@@ -9,6 +9,7 @@ Shapeshift is a Discord bot that lets one account speak as multiple **forms** (n
 - **Message controls** – Every proxied send is stored in `proxied_messages` with webhook id/token/message id + `source_message_id`. That lets the bot power "Edit proxied…", "Delete proxied…", and "Who sent this?" context menus with proper permission checks.
 - **Reply-style rendering** – Webhooks can’t create real replies, so we render a header (`↩︎ Replying to @user`), a single-line quote, and (when possible) a Jump link to mimic Discord’s UX.
 - **Safety** – Allowed Mentions default to "no pings", component limits are respected, and Pino logging (with OTEL hooks) provides structured diagnostics for each interaction (`component`, `interactionId`, etc.).
+- **Autoproxy (Shapeshift)** – `/shapeshift form|latch` pins a form per channel/guild/global scope. Latch mode waits for your next proxy and then follows whichever form you use until you switch.
 
 ## Commands & UI surfaces
 
@@ -16,6 +17,7 @@ Shapeshift is a Discord bot that lets one account speak as multiple **forms** (n
 - `/form add|edit|delete|list` – CRUD for forms, with modals for editing and paginated lists for browsing.
 - `/alias add <form> <trigger>`, `/alias list`, `/alias remove` – Create/list/remove aliases; validation enforces the literal `text` placeholder.
 - `/send <form> <message>` – Send a single message as a form without typing the alias manually.
+- `/shapeshift form|latch|clear|status [scope]` – Manage autoproxy. Scope defaults to guild; choose `channel` or `global` explicitly when needed.
 
 ### Message context menus
 - **Proxy as…** – Take an existing message’s content/attachments and proxy it through one of your forms.

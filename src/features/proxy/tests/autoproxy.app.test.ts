@@ -36,6 +36,9 @@ vi.mock('../infra/AutoproxyRepo', () => ({
     autoproxyRepo: {
         upsertState: vi.fn(),
         getState: vi.fn(),
+        getStateById: vi.fn(),
+        getStateForScope: vi.fn(),
+        getAllStates: vi.fn(),
         clearState: vi.fn(),
         clearAll: vi.fn(),
         recordLatch: vi.fn(),
@@ -71,6 +74,7 @@ describe('Autoproxy Application Use Cases', () => {
             };
 
             formRepo.getCachedByUserAndId.mockResolvedValue(mockForm);
+            mockAutoproxyRepo.getStateForScope.mockResolvedValue(null);
             autoproxyRepo.upsertState.mockResolvedValue(mockState);
 
             const input: SetAutoproxyStateInput = {
@@ -85,6 +89,8 @@ describe('Autoproxy Application Use Cases', () => {
 
             expect(result.success).toBe(true);
             expect(result.state).toEqual(mockState);
+            expect(mockAutoproxyRepo.getStateForScope).toHaveBeenCalledWith('user1', 'guild1', null);
+            expect(mockAutoproxyRepo.clearState).toHaveBeenCalledWith('user1', 'guild1', null);
             expect(formRepo.getCachedByUserAndId).toHaveBeenCalledWith('user1', 'form1');
             expect(autoproxyRepo.upsertState).toHaveBeenCalledWith({
                 userId: 'user1',
@@ -118,6 +124,7 @@ describe('Autoproxy Application Use Cases', () => {
             };
 
             formRepo.getCachedByUserAndId.mockResolvedValue(mockForm);
+            mockAutoproxyRepo.getStateForScope.mockResolvedValue(null);
             autoproxyRepo.upsertState.mockResolvedValue(mockState);
 
             const input: SetAutoproxyStateInput = {
@@ -129,6 +136,8 @@ describe('Autoproxy Application Use Cases', () => {
 
             await setAutoproxyState(input);
 
+            expect(mockAutoproxyRepo.getStateForScope).toHaveBeenCalledWith('user1', 'guild1', null);
+            expect(mockAutoproxyRepo.clearState).toHaveBeenCalledWith('user1', 'guild1', null);
             expect(mockAutoproxyRepo.upsertState).toHaveBeenCalledWith(
                 expect.objectContaining({
                     guildId: 'guild1',
@@ -166,7 +175,7 @@ describe('Autoproxy Application Use Cases', () => {
             };
             const mockNewState = { ...mockExistingState };
 
-            mockAutoproxyRepo.getState.mockResolvedValue(mockExistingState);
+            mockAutoproxyRepo.getStateForScope.mockResolvedValue(mockExistingState);
             mockAutoproxyRepo.upsertState.mockResolvedValue(mockNewState);
 
             const input: SetAutoproxyStateInput = {
@@ -179,11 +188,30 @@ describe('Autoproxy Application Use Cases', () => {
             const result = await setAutoproxyState(input);
 
             expect(result.success).toBe(true);
-            expect(mockAutoproxyRepo.getState).toHaveBeenCalledWith('user1', 'guild1', null);
+            expect(mockAutoproxyRepo.getStateForScope).toHaveBeenCalledWith('user1', 'guild1', null);
+            expect(mockAutoproxyRepo.clearState).toHaveBeenCalledWith('user1', 'guild1', null);
+            expect(mockAutoproxyRepo.upsertState).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    lastFormId: 'form1',
+                })
+            );
         });
 
-        it('should reject latch mode when no prior form exists', async () => {
-            mockAutoproxyRepo.getState.mockResolvedValue(null);
+        it('should arm latch mode even when no prior form exists', async () => {
+            mockAutoproxyRepo.getStateForScope.mockResolvedValue(null);
+            const mockNewState = {
+                id: 'state2',
+                userId: 'user1',
+                guildId: 'guild1',
+                channelId: null,
+                mode: 'latch' as const,
+                formId: null,
+                lastFormId: null,
+                expiresAt: null,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
+            mockAutoproxyRepo.upsertState.mockResolvedValue(mockNewState);
 
             const input: SetAutoproxyStateInput = {
                 userId: 'user1',
@@ -192,7 +220,16 @@ describe('Autoproxy Application Use Cases', () => {
                 guildId: 'guild1',
             };
 
-            await expect(setAutoproxyState(input)).rejects.toThrow('No prior proxied form found');
+            const result = await setAutoproxyState(input);
+
+            expect(result.success).toBe(true);
+            expect(mockAutoproxyRepo.getStateForScope).toHaveBeenCalledWith('user1', 'guild1', null);
+            expect(mockAutoproxyRepo.clearState).toHaveBeenCalledWith('user1', 'guild1', null);
+            expect(mockAutoproxyRepo.upsertState).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    lastFormId: null,
+                })
+            );
         });
 
         it('should reject front mode', async () => {

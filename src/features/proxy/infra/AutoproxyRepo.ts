@@ -30,6 +30,9 @@ export interface AutoproxyState {
 export interface AutoproxyRepo {
     upsertState(data: InsertAutoproxyStateData): Promise<AutoproxyState>;
     getState(userId: string, guildId?: string | null, channelId?: string | null): Promise<AutoproxyState | null>;
+    getAllStates(userId: string): Promise<AutoproxyState[]>;
+    getStateById(id: string): Promise<AutoproxyState | null>;
+    getStateForScope(userId: string, guildId: string | null, channelId: string | null): Promise<AutoproxyState | null>;
     clearState(userId: string, guildId?: string | null, channelId?: string | null): Promise<void>;
     clearAll(userId: string): Promise<void>;
     recordLatch(userId: string, lastFormId: string, guildId?: string | null, channelId?: string | null): Promise<void>;
@@ -102,6 +105,77 @@ export class DrizzleAutoproxyRepo implements AutoproxyRepo {
                 userId,
                 guildId: guildId || undefined,
                 channelId: channelId || undefined,
+                status: 'database_error',
+                error
+            });
+            throw error;
+        }
+    }
+
+    async getAllStates(userId: string): Promise<AutoproxyState[]> {
+        try {
+            const result = await db
+                .select()
+                .from(autoproxyStates)
+                .where(eq(autoproxyStates.userId, userId))
+                .orderBy(
+                    sql`${autoproxyStates.channelId} IS NOT NULL DESC`,
+                    sql`${autoproxyStates.guildId} IS NOT NULL DESC`
+                );
+
+            return result;
+        } catch (error) {
+            log.error('Failed to get all autoproxy states', {
+                component: 'proxy',
+                userId,
+                status: 'database_error',
+                error
+            });
+            throw error;
+        }
+    }
+
+    async getStateById(id: string): Promise<AutoproxyState | null> {
+        try {
+            const result = await db
+                .select()
+                .from(autoproxyStates)
+                .where(eq(autoproxyStates.id, id))
+                .limit(1);
+
+            return result[0] || null;
+        } catch (error) {
+            log.error('Failed to get autoproxy state by id', {
+                component: 'proxy',
+                autoproxyStateId: id,
+                status: 'database_error',
+                error
+            });
+            throw error;
+        }
+    }
+
+    async getStateForScope(userId: string, guildId: string | null, channelId: string | null): Promise<AutoproxyState | null> {
+        try {
+            const conditions = [
+                eq(autoproxyStates.userId, userId),
+                sql`${autoproxyStates.guildId} IS NOT DISTINCT FROM ${guildId}`,
+                sql`${autoproxyStates.channelId} IS NOT DISTINCT FROM ${channelId}`
+            ];
+
+            const result = await db
+                .select()
+                .from(autoproxyStates)
+                .where(and(...conditions))
+                .limit(1);
+
+            return result[0] ?? null;
+        } catch (error) {
+            log.error('Failed to get autoproxy state for scope', {
+                component: 'proxy',
+                userId,
+                guildId: guildId ?? undefined,
+                channelId: channelId ?? undefined,
                 status: 'database_error',
                 error
             });

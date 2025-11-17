@@ -49,6 +49,10 @@ vi.mock('../../../shared/utils/errorHandling', () => ({
     handleDegradedModeError: vi.fn(),
 }));
 
+vi.mock('../../../features/proxy/app/autoproxy/RecordLatchedForm', () => ({
+    recordLatchedForm: vi.fn(() => Promise.resolve({ success: true })),
+}));
+
 // Import after mocking
 import { matchAlias, clearAliasCache } from '../../../features/proxy/app/MatchAlias';
 import { validateUserChannelPerms } from '../../../features/proxy/app/ValidateUserChannelPerms';
@@ -57,6 +61,7 @@ import { formRepo } from '../../../features/identity/infra/FormRepo';
 import { DiscordChannelProxy } from '../../../adapters/discord/DiscordChannelProxy';
 import { reuploadAttachments } from '../../../shared/utils/attachments';
 import { handleDegradedModeError } from '../../../shared/utils/errorHandling';
+import { recordLatchedForm } from '../../../features/proxy/app/autoproxy/RecordLatchedForm';
 
 describe('messageCreateProxy function', () => {
     let mockMessage: Message<boolean>;
@@ -169,6 +174,25 @@ describe('messageCreateProxy function', () => {
             'delete proxied source'
         );
         expect(mockMessage.delete).toHaveBeenCalled();
+        expect(recordLatchedForm).toHaveBeenCalledTimes(3);
+        expect(recordLatchedForm).toHaveBeenNthCalledWith(1, {
+            userId: 'user123',
+            formId: 'form1',
+            guildId: 'guild789',
+            channelId: 'channel456',
+        });
+        expect(recordLatchedForm).toHaveBeenNthCalledWith(2, {
+            userId: 'user123',
+            formId: 'form1',
+            guildId: 'guild789',
+            channelId: null,
+        });
+        expect(recordLatchedForm).toHaveBeenNthCalledWith(3, {
+            userId: 'user123',
+            formId: 'form1',
+            guildId: null,
+            channelId: null,
+        });
     });
 
     it('should skip proxying if user lacks permissions', async () => {

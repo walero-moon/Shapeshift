@@ -23,7 +23,7 @@ export interface SetAutoproxyStateResult {
  * Business rules:
  * - Default scope to 'guild' if undefined
  * - For 'form' mode: validate form ownership
- * - For 'latch' mode: ensure prior proxied form exists (check existing latch states)
+ * - For 'latch' mode: allow arming without prior form; reuse existing latched form if the same scope was already locked
  * - 'front' mode: reserved for future
  * - Set scope: channel (guildId + channelId), guild (guildId), global (null)
  */
@@ -59,6 +59,14 @@ export async function setAutoproxyState(input: SetAutoproxyStateInput): Promise<
                 throw new Error(`Invalid scope: ${effectiveScope}`);
         }
 
+        const existingState = await autoproxyRepo.getStateForScope(
+            userId,
+            effectiveGuildId,
+            effectiveChannelId
+        );
+
+        let latchLastFormId: string | null | undefined;
+
         // Validate mode-specific requirements
         switch (mode) {
             case 'form': {
@@ -73,11 +81,9 @@ export async function setAutoproxyState(input: SetAutoproxyStateInput): Promise<
                 break;
             }
             case 'latch': {
-                // Check if user has any existing latch states with last_form_id
-                const existingLatch = await autoproxyRepo.getState(userId, effectiveGuildId, effectiveChannelId);
-                if (!existingLatch || existingLatch.mode !== 'latch' || !existingLatch.lastFormId) {
-                    throw new Error('No prior proxied form found. Proxy once with an alias or /send before enabling latch mode.');
-                }
+                latchLastFormId = existingState && existingState.mode === 'latch'
+                    ? existingState.lastFormId ?? null
+                    : null;
                 break;
             }
             case 'front':
@@ -86,6 +92,9 @@ export async function setAutoproxyState(input: SetAutoproxyStateInput): Promise<
                 throw new Error(`Invalid mode: ${mode}`);
         }
 
+        // Remove any existing state for this scope before inserting the new one
+        await autoproxyRepo.clearState(userId, effectiveGuildId, effectiveChannelId);
+
         // Set the state
         const state = await autoproxyRepo.upsertState({
             userId,
@@ -93,11 +102,11 @@ export async function setAutoproxyState(input: SetAutoproxyStateInput): Promise<
             channelId: effectiveChannelId,
             mode,
             formId: mode === 'form' ? formId || null : null,
-            lastFormId: null, // Will be set by RecordLatchedForm
+            lastFormId: mode === 'latch' ? latchLastFormId ?? null : null, // RecordLatchedForm updates latch entries
         });
 
         log.info('Autoproxy state set', {
-            component: 'proxy',
+            component: 'autoproxy',
             userId,
             guildId: effectiveGuildId || undefined,
             channelId: effectiveChannelId || undefined,
@@ -112,7 +121,7 @@ export async function setAutoproxyState(input: SetAutoproxyStateInput): Promise<
         };
     } catch (error) {
         log.error('Failed to set autoproxy state', {
-            component: 'proxy',
+            component: 'autoproxy',
             userId: input.userId,
             guildId: input.guildId || undefined,
             channelId: input.channelId || undefined,

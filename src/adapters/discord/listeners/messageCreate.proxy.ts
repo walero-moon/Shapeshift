@@ -4,6 +4,7 @@ import { matchAlias } from '../../../features/proxy/app/MatchAlias';
 import { validateUserChannelPerms } from '../../../features/proxy/app/ValidateUserChannelPerms';
 import { proxyCoordinator } from '../../../features/proxy/app/ProxyCoordinator';
 import { formRepo } from '../../../features/identity/infra/FormRepo';
+import { recordLatchedForm } from '../../../features/proxy/app/autoproxy/RecordLatchedForm';
 import { DiscordChannelProxy } from '../DiscordChannelProxy';
 import { client } from '../client';
 import { log } from '../../../shared/utils/logger';
@@ -371,6 +372,26 @@ export async function messageCreateProxy(message: Message) {
             userId: message.author.id,
             guildId: message.guildId || undefined,
             channelId: message.channelId
+        });
+
+        // Update latch history for this user (channel, guild, global scopes)
+        await recordLatchedForm({
+            userId: message.author.id,
+            formId: form.id,
+            guildId: message.guildId,
+            channelId: message.channelId
+        });
+        await recordLatchedForm({
+            userId: message.author.id,
+            formId: form.id,
+            guildId: message.guildId,
+            channelId: null
+        });
+        await recordLatchedForm({
+            userId: message.author.id,
+            formId: form.id,
+            guildId: null,
+            channelId: null
         });
 
         // Handle large attachments with follow-up edits

@@ -39,7 +39,7 @@ export async function recordLatchedForm(input: RecordLatchedFormInput): Promise<
         );
 
         log.debug('Latched form recorded', {
-            component: 'proxy',
+            component: 'autoproxy',
             userId,
             formId,
             guildId: guildId || undefined,
@@ -53,7 +53,7 @@ export async function recordLatchedForm(input: RecordLatchedFormInput): Promise<
     } catch (error) {
         // Don't throw - this is not critical for the main flow
         log.warn('Failed to record latched form (non-critical)', {
-            component: 'proxy',
+            component: 'autoproxy',
             userId: input.userId,
             formId: input.formId,
             guildId: input.guildId || undefined,
