@@ -57,7 +57,6 @@ import { formRepo } from '../../../features/identity/infra/FormRepo';
 import { DiscordChannelProxy } from '../../../adapters/discord/DiscordChannelProxy';
 import { reuploadAttachments } from '../../../shared/utils/attachments';
 import { handleDegradedModeError } from '../../../shared/utils/errorHandling';
-import log from '../../../shared/utils/logger';
 
 describe('messageCreateProxy function', () => {
     let mockMessage: Message<boolean>;

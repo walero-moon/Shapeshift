@@ -143,7 +143,7 @@ export async function handleProxyAsModalSubmit(interaction: ModalSubmitInteracti
         const channelProxy = getChannelProxy(interaction.channel.id);
 
         // Execute proxy
-        const result = await proxyMessageContext({
+        await proxyMessageContext({
             userId: interaction.user.id,
             formId: selectedForm.id,
             targetMessage: {
