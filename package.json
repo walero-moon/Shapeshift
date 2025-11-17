@@ -16,7 +16,8 @@
         "db:generate": "drizzle-kit generate",
         "db:migrate": "drizzle-kit migrate",
         "deploy:guild": "tsx src/adapters/discord/register-commands.ts guild",
-        "deploy:global": "tsx src/adapters/discord/register-commands.ts global"
+        "deploy:global": "tsx src/adapters/discord/register-commands.ts global",
+        "deploy:clear": "tsx src/adapters/discord/clear-commands.ts"
     },
     "dependencies": {
         "@discordjs/rest": "^2.4.0",
