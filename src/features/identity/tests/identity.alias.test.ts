@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { normalizeAlias, getAliasKind } from '../app/normalizeAlias';
+import { normalizeAlias, getAliasKind } from '../app/NormalizeAlias';
 import { addAlias, AddAliasInput } from '../app/AddAlias';
 import { listAliases } from '../app/ListAliases';
 import { removeAlias } from '../app/RemoveAlias';
