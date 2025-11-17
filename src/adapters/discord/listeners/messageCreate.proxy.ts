@@ -360,7 +360,8 @@ export async function messageCreateProxy(message: Message) {
             standardizedAttachments,
             replyTo,
             form,
-            replyMessage
+            replyMessage,
+            message.id
         );
         const proxySendDuration = performance.now() - proxySendStart;
         log.debug('Proxy stage complete', {

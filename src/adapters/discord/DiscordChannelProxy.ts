@@ -201,3 +201,10 @@ export class DiscordChannelProxy implements ChannelProxyPort {
         throw new Error('Max retries exceeded for Discord API call');
     }
 }
+
+/**
+ * Factory function to create a channel proxy for a specific channel
+ */
+export function getChannelProxy(channelId: string): ChannelProxyPort {
+    return new DiscordChannelProxy(channelId);
+}

@@ -119,6 +119,8 @@ import { handleModalSubmit as formEditHandleModal } from '../../features/identit
 import { execute as aliasAutocompleteExecute } from '../../features/identity/discord/alias.autocomplete';
 import { handleButtonInteraction as aliasListHandleButton } from '../../features/identity/discord/alias.list';
 import { execute as sendAutocompleteExecute } from '../../features/proxy/discord/send.autocomplete';
+import { handleProxyAsModalSubmit } from '../../features/proxy/discord/context/proxyAs';
+import { handleEditProxiedModalSubmit } from '../../features/proxy/discord/context/editProxied';
 
 registry.registerAutocomplete('form', formAutocompleteExecute);
 registry.registerButton('form_list', formListHandleButton);
@@ -126,3 +128,5 @@ registry.registerModal('edit_form', formEditHandleModal);
 registry.registerAutocomplete('alias', aliasAutocompleteExecute);
 registry.registerButton('alias_list', aliasListHandleButton);
 registry.registerAutocomplete('send', sendAutocompleteExecute);
+registry.registerModal('proxy_as', handleProxyAsModalSubmit);
+registry.registerModal('edit_proxied', handleEditProxiedModalSubmit);

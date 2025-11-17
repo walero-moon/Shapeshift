@@ -22,7 +22,8 @@ export async function proxyCoordinator(
     attachments?: ProxyAttachment[], // Reuploaded attachments in standardized format
     _replyTo?: { guildId: string; channelId: string; messageId: string },
     form?: Form,
-    _replyMessage?: Message
+    _replyMessage?: Message,
+    sourceMessageId?: string
 ): Promise<{ webhookId: string; token: string; messageId: string }> {
     try {
         log.info('Starting proxy coordination', {
@@ -105,7 +106,8 @@ export async function proxyCoordinator(
                     channelId,
                     webhookId: sendResult.webhookId,
                     webhookToken: sendResult.webhookToken,
-                    messageId: sendResult.messageId
+                    messageId: sendResult.messageId,
+                    sourceMessageId: sourceMessageId ?? null
                 });
 
                 log.info('Proxied message persisted', {

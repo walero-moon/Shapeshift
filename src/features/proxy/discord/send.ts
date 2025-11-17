@@ -162,7 +162,11 @@ export const command = {
                 interaction.guild!.id,
                 text,
                 channelProxy,
-                standardizedAttachments
+                standardizedAttachments,
+                undefined,
+                form,
+                undefined,
+                undefined
             );
 
             // Confirm with link to the message

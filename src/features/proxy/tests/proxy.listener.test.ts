@@ -68,6 +68,7 @@ describe('messageCreateProxy function', () => {
         clearAliasCache();
 
         mockMessage = {
+            id: 'message123',
             author: { bot: false, id: 'user123' },
             content: 'n:text hello world',
             channelId: 'channel456',
@@ -288,7 +289,8 @@ describe('messageCreateProxy function', () => {
             mockReuploadedAttachments,
             undefined,
             mockForm,
-            null
+            null,
+            'message123'
         );
     });
 
@@ -476,7 +478,8 @@ describe('messageCreateProxy function', () => {
             [], // Empty attachments due to failure
             undefined,
             mockForm,
-            null
+            null,
+            'message123'
         );
     });
 });
