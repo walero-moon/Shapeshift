@@ -23,6 +23,23 @@ export const aliases = pgTable('aliases', {
     uniqueIndex('aliases_user_id_trigger_norm_unique').on(table.userId, table.triggerNorm),
 ]);
 
+export const autoproxyModeEnum = pgEnum('autoproxy_mode', ['form', 'latch', 'front']);
+
+export const autoproxyStates = pgTable('autoproxy_states', {
+    id: uuid('id').primaryKey().default(sql`uuidv7()`),
+    userId: text('user_id').notNull(),
+    guildId: text('guild_id'),
+    channelId: text('channel_id'),
+    mode: autoproxyModeEnum('mode').notNull(),
+    formId: uuid('form_id').references(() => forms.id, { onDelete: 'cascade' }),
+    lastFormId: uuid('last_form_id'),
+    expiresAt: timestamp('expires_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+    uniqueIndex('autoproxy_states_user_guild_channel_unique').on(table.userId, table.guildId.nullsFirst(), table.channelId.nullsFirst()),
+]);
+
 export const proxiedMessages = pgTable('proxied_messages', {
     id: uuid('id').primaryKey().default(sql`uuidv7()`),
     userId: text('user_id').notNull(),
