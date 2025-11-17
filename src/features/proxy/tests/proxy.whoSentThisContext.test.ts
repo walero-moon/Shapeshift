@@ -48,7 +48,10 @@ describe('whoSentThisContextCommand', () => {
     });
 
     it('replies with warning if not in guild text channel', async () => {
-        interaction.guild = null;
+        interaction = {
+            ...interaction,
+            guild: null
+        } as unknown as MessageContextMenuCommandInteraction;
 
         await whoSentThisContextCommand.execute(interaction);
 

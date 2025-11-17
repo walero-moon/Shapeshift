@@ -1,4 +1,4 @@
-import { ChatInputCommandInteraction, ModalSubmitInteraction, MessageFlags } from 'discord.js';
+import { ChatInputCommandInteraction, ModalSubmitInteraction, MessageFlags, MessageContextMenuCommandInteraction } from 'discord.js';
 import { URL } from 'url';
 import { DEFAULT_ALLOWED_MENTIONS } from './allowedMentions';
 import log, { LogContext } from './logger';
@@ -20,7 +20,7 @@ interface InteractionErrorOptions {
 }
 
 export async function handleInteractionError(
-    interaction: ChatInputCommandInteraction | ModalSubmitInteraction,
+    interaction: ChatInputCommandInteraction | ModalSubmitInteraction | MessageContextMenuCommandInteraction,
     error: unknown,
     context: InteractionErrorContext,
     userMessage = 'An unexpected error occurred. Please try again later.',

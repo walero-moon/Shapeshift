@@ -53,11 +53,13 @@ export async function editProxiedMessage(
         }
     }
 
-    await channelProxy.edit(record.webhookId, record.webhookToken, record.messageId, {
+    const editPayload = {
         content,
-        attachments: attachmentPayload,
-        allowedMentions: DEFAULT_ALLOWED_MENTIONS
-    });
+        allowedMentions: DEFAULT_ALLOWED_MENTIONS,
+        ...(attachmentPayload ? { attachments: attachmentPayload } : {})
+    };
+
+    await channelProxy.edit(record.webhookId, record.webhookToken, record.messageId, editPayload);
 
     log.info('Proxied message edit complete', {
         component: 'proxy-context',

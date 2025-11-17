@@ -178,13 +178,15 @@ export async function handleEditProxiedModalSubmit(interaction: ModalSubmitInter
 
         const channelProxy = getChannelProxy(record.channelId);
 
+        const editInput = {
+            record,
+            userId: interaction.user.id,
+            content: newContent,
+            ...(attachments ? { attachments } : {})
+        };
+
         await editProxiedMessage(
-            {
-                record,
-                userId: interaction.user.id,
-                content: newContent,
-                attachments
-            },
+            editInput,
             channelProxy
         );
         log.info('Edit proxied modal completed', {
