@@ -15,11 +15,16 @@ export interface InteractionErrorContext extends LogContext {
  * Handles Discord interaction errors with proper logging and user-friendly responses.
  * Automatically determines whether to use reply() or editReply() based on interaction state.
  */
+interface InteractionErrorOptions {
+    preferFollowUp?: boolean;
+}
+
 export async function handleInteractionError(
     interaction: ChatInputCommandInteraction | ModalSubmitInteraction,
     error: unknown,
     context: InteractionErrorContext,
-    userMessage = 'An unexpected error occurred. Please try again later.'
+    userMessage = 'An unexpected error occurred. Please try again later.',
+    options: InteractionErrorOptions = {}
 ): Promise<void> {
     // Log the error with full context
     log.error('Interaction error', {
@@ -33,10 +38,16 @@ export async function handleInteractionError(
     const isDeferred = interaction.deferred || interaction.replied;
 
     try {
-        if (isDeferred) {
+        if (isDeferred && !options.preferFollowUp) {
             await interaction.editReply({
                 content: userMessage,
                 allowedMentions: DEFAULT_ALLOWED_MENTIONS
+            });
+        } else if (isDeferred) {
+            await interaction.followUp({
+                content: userMessage,
+                allowedMentions: DEFAULT_ALLOWED_MENTIONS,
+                flags: MessageFlags.Ephemeral
             });
         } else {
             await interaction.reply({

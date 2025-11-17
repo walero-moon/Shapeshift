@@ -84,8 +84,9 @@ describe('editProxiedContextCommand', () => {
                     fetch: vi.fn()
                 }
             },
-            deferReply: vi.fn(),
+            deferReply: vi.fn().mockResolvedValue(undefined),
             editReply: vi.fn(),
+            deleteReply: vi.fn().mockResolvedValue(undefined),
             fields: {
                 getTextInputValue: vi.fn()
             }
@@ -173,10 +174,7 @@ describe('editProxiedContextCommand', () => {
                 },
                 expect.anything()
             );
-            expect(mockModalInteraction.editReply).toHaveBeenCalledWith({
-                content: '✅ Proxied message updated successfully.',
-                allowedMentions: expect.any(Object)
-            });
+            expect(mockModalInteraction.deleteReply).toHaveBeenCalled();
         });
 
         it('handles missing record via interaction error handler', async () => {
@@ -193,7 +191,8 @@ describe('editProxiedContextCommand', () => {
                     userId: 'user-123',
                     interactionId: mockModalInteraction.id
                 }),
-                expect.stringContaining('not proxied')
+                expect.stringContaining('not proxied'),
+                expect.objectContaining({ preferFollowUp: true })
             );
         });
     });

@@ -21,9 +21,28 @@ export const proxyAsContextCommand = {
         .setName('Proxy as')
         .setType(ApplicationCommandType.Message),
     async execute(interaction: MessageContextMenuCommandInteraction): Promise<void> {
+        const baseContext = {
+            component: 'proxy-context',
+            action: 'proxy_as_context',
+            userId: interaction.user.id,
+            guildId: interaction.guild?.id,
+            channelId: interaction.channel?.id,
+            interactionId: interaction.id,
+            targetMessageId: interaction.targetMessage?.id
+        };
+        const start = Date.now();
+        log.info('Proxy-as context triggered', {
+            ...baseContext,
+            status: 'context_start'
+        });
+
         const targetMessage = interaction.targetMessage;
 
         if (!interaction.guild || !interaction.channel || !interaction.channel.isTextBased()) {
+            log.warn('Proxy-as context used outside guild text channel', {
+                ...baseContext,
+                status: 'context_invalid_channel'
+            });
             await interaction.reply({
                 content: '❌ This context menu can only be used inside guild text channels.',
                 flags: MessageFlags.Ephemeral,
@@ -34,6 +53,10 @@ export const proxyAsContextCommand = {
 
         // Validate target message
         if (targetMessage.author.bot || targetMessage.author.system) {
+            log.warn('Proxy-as attempted on bot/system message', {
+                ...baseContext,
+                status: 'context_invalid_target'
+            });
             await interaction.reply({
                 content: '❌ Cannot proxy bot or system messages.',
                 flags: MessageFlags.Ephemeral,
@@ -45,6 +68,10 @@ export const proxyAsContextCommand = {
         // Get user's forms
         const forms = await listForms(interaction.user.id);
         if (forms.length === 0) {
+            log.warn('Proxy-as invoked without available forms', {
+                ...baseContext,
+                status: 'context_no_forms'
+            });
             await interaction.reply({
                 content: '❌ You have no forms to proxy as. Create a form first with `/form add`.',
                 flags: MessageFlags.Ephemeral,
@@ -95,12 +122,33 @@ export const proxyAsContextCommand = {
         modal.addComponents(formRow, previewRow, deleteRow);
 
         await interaction.showModal(modal);
+
+        log.info('Proxy-as modal displayed', {
+            ...baseContext,
+            durationMs: Date.now() - start,
+            status: 'context_modal_shown'
+        });
     }
 };
 
 export async function handleProxyAsModalSubmit(interaction: ModalSubmitInteraction): Promise<void> {
     const [action, targetMessageId] = interaction.customId.split(':');
     if (action !== 'proxy_as' || !targetMessageId) return;
+
+    const baseContext = {
+        component: 'proxy-context',
+        action: 'proxy_as_modal',
+        userId: interaction.user.id,
+        guildId: interaction.guild?.id,
+        channelId: interaction.channel?.id,
+        interactionId: interaction.id,
+        targetMessageId
+    };
+    const start = Date.now();
+    log.info('Proxy-as modal submission received', {
+        ...baseContext,
+        status: 'modal_start'
+    });
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -197,6 +245,12 @@ export async function handleProxyAsModalSubmit(interaction: ModalSubmitInteracti
             content: `✅ Message proxied successfully!${deleteOriginal ? ' Original message deleted.' : ''}`,
             allowedMentions: DEFAULT_ALLOWED_MENTIONS
         });
+        log.info('Proxy-as modal completed', {
+            ...baseContext,
+            deleteOriginal,
+            durationMs: Date.now() - start,
+            status: 'modal_success'
+        });
     } catch (error) {
         await handleInteractionError(interaction, error, {
             component: 'proxy-context',
@@ -205,5 +259,10 @@ export async function handleProxyAsModalSubmit(interaction: ModalSubmitInteracti
             channelId: interaction.channel?.id,
             interactionId: interaction.id
         }, error instanceof Error ? error.message : 'An error occurred while proxying the message.');
+        log.error('Proxy-as modal failed', {
+            ...baseContext,
+            error: error instanceof Error ? error.message : String(error),
+            status: 'modal_error'
+        });
     }
 }

@@ -14,6 +14,7 @@ import { DEFAULT_ALLOWED_MENTIONS } from '../../../../shared/utils/allowedMentio
 import { handleInteractionError } from '../../../../shared/utils/errorHandling';
 import { editProxiedMessage } from '../../app/EditProxiedMessage';
 import { getChannelProxy } from '../../../../adapters/discord/DiscordChannelProxy';
+import log from '../../../../shared/utils/logger';
 
 const EDIT_MODAL_PREFIX = 'edit_proxied';
 
@@ -22,8 +23,27 @@ export const editProxiedContextCommand = {
         .setName('Edit proxied message')
         .setType(ApplicationCommandType.Message),
     async execute(interaction: MessageContextMenuCommandInteraction): Promise<void> {
+        const baseContext = {
+            component: 'proxy-context',
+            action: 'edit_proxied_context',
+            userId: interaction.user.id,
+            guildId: interaction.guild?.id,
+            channelId: interaction.channel?.id,
+            interactionId: interaction.id,
+            targetMessageId: interaction.targetMessage.id
+        };
+        const start = Date.now();
+        log.info('Edit proxied context triggered', {
+            ...baseContext,
+            status: 'context_start'
+        });
+
         try {
             if (!interaction.guild || !interaction.channel || !interaction.channel.isTextBased()) {
+                log.warn('Edit proxied context outside guild channel', {
+                    ...baseContext,
+                    status: 'context_invalid_channel'
+                });
                 await interaction.reply({
                     content: '❌ This context menu can only be used inside guild text channels.',
                     flags: MessageFlags.Ephemeral,
@@ -36,6 +56,10 @@ export const editProxiedContextCommand = {
             const record = await proxiedMessageRepo.getByWebhookMessageId(targetMessage.id);
 
             if (!record) {
+                log.warn('Edit proxied context message not tracked', {
+                    ...baseContext,
+                    status: 'context_not_tracked'
+                });
                 await interaction.reply({
                     content: '❌ This message was not proxied by Shapeshift or the log has expired.',
                     flags: MessageFlags.Ephemeral,
@@ -45,6 +69,11 @@ export const editProxiedContextCommand = {
             }
 
             if (record.userId !== interaction.user.id) {
+                log.warn('Edit proxied context unauthorized user', {
+                    ...baseContext,
+                    ownerId: record.userId,
+                    status: 'context_not_owner'
+                });
                 await interaction.reply({
                     content: '❌ You can only edit messages that you proxied.',
                     flags: MessageFlags.Ephemeral,
@@ -70,6 +99,11 @@ export const editProxiedContextCommand = {
             modal.addComponents(row);
 
             await interaction.showModal(modal);
+            log.info('Edit proxied modal displayed', {
+                ...baseContext,
+                status: 'context_modal_shown',
+                durationMs: Date.now() - start
+            });
         } catch (error) {
             await handleInteractionError(interaction, error, {
                 component: 'proxy-context',
@@ -78,6 +112,11 @@ export const editProxiedContextCommand = {
                 channelId: interaction.channel?.id,
                 interactionId: interaction.id
             }, 'An unexpected error occurred while preparing the edit modal.');
+            log.error('Edit proxied context failed', {
+                ...baseContext,
+                error: error instanceof Error ? error.message : String(error),
+                status: 'context_error'
+            });
         }
     }
 };
@@ -86,7 +125,23 @@ export async function handleEditProxiedModalSubmit(interaction: ModalSubmitInter
     const [prefix, targetMessageId] = interaction.customId.split(':');
     if (prefix !== EDIT_MODAL_PREFIX || !targetMessageId) return;
 
+    const baseContext = {
+        component: 'proxy-context',
+        action: 'edit_proxied_modal',
+        userId: interaction.user.id,
+        guildId: interaction.guild?.id,
+        channelId: interaction.channel?.id,
+        interactionId: interaction.id,
+        targetMessageId
+    };
+    const start = Date.now();
+    log.info('Edit proxied modal submission received', {
+        ...baseContext,
+        status: 'modal_start'
+    });
+
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await interaction.deleteReply().catch(() => {});
 
     try {
         if (!interaction.guild || !interaction.channel || !interaction.channel.isTextBased()) {
@@ -132,11 +187,12 @@ export async function handleEditProxiedModalSubmit(interaction: ModalSubmitInter
             },
             channelProxy
         );
-
-        await interaction.editReply({
-            content: '✅ Proxied message updated successfully.',
-            allowedMentions: DEFAULT_ALLOWED_MENTIONS
+        log.info('Edit proxied modal completed', {
+            ...baseContext,
+            status: 'modal_success',
+            durationMs: Date.now() - start
         });
+
     } catch (error) {
         await handleInteractionError(interaction, error, {
             component: 'proxy-context',
@@ -144,6 +200,11 @@ export async function handleEditProxiedModalSubmit(interaction: ModalSubmitInter
             guildId: interaction.guild?.id,
             channelId: interaction.channel?.id,
             interactionId: interaction.id
-        }, error instanceof Error ? error.message : 'Failed to edit the proxied message.');
+        }, error instanceof Error ? error.message : 'Failed to edit the proxied message.', { preferFollowUp: true });
+        log.error('Edit proxied modal failed', {
+            ...baseContext,
+            error: error instanceof Error ? error.message : String(error),
+            status: 'modal_error'
+        });
     }
 }
