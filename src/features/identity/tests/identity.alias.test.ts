@@ -5,6 +5,7 @@ import { listAliases } from '../app/ListAliases';
 import { removeAlias } from '../app/RemoveAlias';
 import { formRepo } from '../infra/FormRepo';
 import { aliasRepo } from '../infra/AliasRepo';
+import { invalidateAliasCache } from '../../proxy/app/MatchAlias';
 
 // Mock the repositories
 vi.mock('../infra/FormRepo', () => ({
@@ -14,6 +15,7 @@ vi.mock('../infra/FormRepo', () => ({
         create: vi.fn(),
         update: vi.fn(),
         delete: vi.fn(),
+        invalidateCache: vi.fn(),
     },
 }));
 
@@ -26,6 +28,10 @@ vi.mock('../infra/AliasRepo', () => ({
         delete: vi.fn(),
         findCollision: vi.fn(),
     },
+}));
+
+vi.mock('../../proxy/app/MatchAlias', () => ({
+    invalidateAliasCache: vi.fn(),
 }));
 
 describe('Alias normalization', () => {
@@ -113,6 +119,8 @@ describe('addAlias function', () => {
             triggerNorm: 'n:text',
             kind: 'prefix',
         });
+
+        expect(invalidateAliasCache).toHaveBeenCalledWith('user1');
     });
 
     it('should handle form not found', async () => {
@@ -363,6 +371,7 @@ describe('removeAlias function', () => {
 
         expect(aliasRepo.getById).toHaveBeenCalledWith('alias1', 'user1');
         expect(aliasRepo.delete).toHaveBeenCalledWith('alias1');
+        expect(invalidateAliasCache).toHaveBeenCalledWith('user1');
     });
 
     it('should handle alias not found', async () => {

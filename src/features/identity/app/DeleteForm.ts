@@ -1,4 +1,5 @@
 import { formRepo } from '../infra/FormRepo';
+import { invalidateAliasCache } from '../../proxy/app/MatchAlias';
 import log from '../../../shared/utils/logger';
 
 /**
@@ -25,6 +26,9 @@ export async function deleteForm(formId: string, userId: string): Promise<void> 
 
         // Delete the form itself; aliases are removed via ON DELETE CASCADE
         await formRepo.delete(formId);
+
+        // Ensure alias cache no longer returns deleted form aliases
+        invalidateAliasCache(userId);
     } catch (error) {
         log.error('Failed to delete form', {
             component: 'identity',

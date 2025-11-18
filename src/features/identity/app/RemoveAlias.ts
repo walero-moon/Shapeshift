@@ -1,4 +1,5 @@
 import { aliasRepo } from '../infra/AliasRepo';
+import { invalidateAliasCache } from '../../proxy/app/MatchAlias';
 import log from '../../../shared/utils/logger';
 
 /**
@@ -19,6 +20,9 @@ export async function removeAlias(aliasId: string, userId: string): Promise<void
 
         // Delete the alias
         await aliasRepo.delete(aliasId);
+
+        // Ensure stale alias entries are purged
+        invalidateAliasCache(userId);
     } catch (error) {
         log.error('Failed to remove alias', {
             component: 'identity',

@@ -1,6 +1,7 @@
 import { formRepo } from '../infra/FormRepo';
 import { aliasRepo } from '../infra/AliasRepo';
 import { normalizeAlias, getAliasKind } from './NormalizeAlias';
+import { invalidateAliasCache } from '../../proxy/app/MatchAlias';
 import log from '../../../shared/utils/logger';
 
 export interface CreateFormInput {
@@ -127,6 +128,9 @@ export async function createForm(userId: string, input: CreateFormInput): Promis
 
             throw error; // Re-throw the original error
         }
+
+        // Ensure future proxy attempts fetch the fresh alias list
+        invalidateAliasCache(userId);
 
         return {
             form: {

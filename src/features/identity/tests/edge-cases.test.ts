@@ -14,6 +14,7 @@ vi.mock('../infra/FormRepo', () => ({
         create: vi.fn(),
         updateNameAvatar: vi.fn(),
         delete: vi.fn(),
+        invalidateCache: vi.fn(),
     },
 }));
 

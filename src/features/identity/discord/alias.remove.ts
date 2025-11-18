@@ -2,7 +2,6 @@ import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, MessageFlag
 import { removeAlias } from '../app/RemoveAlias';
 import { DEFAULT_ALLOWED_MENTIONS } from '../../../shared/utils/allowedMentions';
 import { handleInteractionError } from '../../../shared/utils/errorHandling';
-import { invalidateAliasCache } from '../../proxy/app/MatchAlias';
 
 export const data = new SlashCommandSubcommandBuilder()
     .setName('remove')
@@ -19,9 +18,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
     try {
         await removeAlias(aliasId, interaction.user.id);
-
-        // Invalidate cache after successful alias removal
-        invalidateAliasCache(interaction.user.id);
 
         return await interaction.editReply({
             content: `✅ Alias removed successfully!`,

@@ -1,5 +1,5 @@
 import { formRepo } from '../infra/FormRepo';
-import { aliasRepo } from '../infra/AliasRepo';
+import { aliasRepo, type Alias } from '../infra/AliasRepo';
 import log from '../../../shared/utils/logger';
 
 export interface FormWithAliases {
@@ -27,7 +27,18 @@ export async function listForms(userId: string): Promise<FormWithAliases[]> {
         const forms = await formRepo.getByUser(userId);
 
         // Get all aliases for the user grouped by form_id
-        const groupedAliases = await aliasRepo.listByUserGrouped(userId);
+        let groupedAliases: Record<string, Alias[]> = {};
+        try {
+            groupedAliases = await aliasRepo.listByUserGrouped(userId);
+        } catch (aliasError) {
+            log.error('Failed to load aliases for forms list', {
+                component: 'identity',
+                userId,
+                status: 'alias_list_error',
+                error: aliasError instanceof Error ? aliasError.message : String(aliasError),
+            });
+            groupedAliases = {};
+        }
 
         const formsWithAliases: FormWithAliases[] = [];
 

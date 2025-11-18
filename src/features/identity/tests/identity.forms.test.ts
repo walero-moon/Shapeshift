@@ -5,6 +5,7 @@ import { deleteForm } from '../app/DeleteForm';
 import { listForms } from '../app/ListForms';
 import { formRepo } from '../infra/FormRepo';
 import { aliasRepo } from '../infra/AliasRepo';
+import { invalidateAliasCache } from '../../proxy/app/MatchAlias';
 
 // Mock the repositories
 vi.mock('../infra/FormRepo', () => ({
@@ -14,6 +15,7 @@ vi.mock('../infra/FormRepo', () => ({
         create: vi.fn(),
         updateNameAvatar: vi.fn(),
         delete: vi.fn(),
+        invalidateCache: vi.fn(),
     },
 }));
 
@@ -26,6 +28,10 @@ vi.mock('../infra/AliasRepo', () => ({
         delete: vi.fn(),
         findCollision: vi.fn(),
     },
+}));
+
+vi.mock('../../proxy/app/MatchAlias', () => ({
+    invalidateAliasCache: vi.fn(),
 }));
 
 describe('createForm function', () => {
@@ -105,6 +111,8 @@ describe('createForm function', () => {
 
         // Should create two default aliases
         expect(aliasRepo.create).toHaveBeenCalledTimes(2);
+
+        expect(invalidateAliasCache).toHaveBeenCalledWith('user1');
     });
 
     it('should create form without short alias if collision exists', async () => {
@@ -495,6 +503,8 @@ describe('deleteForm function', () => {
         // No manual alias operations
         expect(aliasRepo.getByForm).not.toHaveBeenCalled();
         expect(aliasRepo.delete).not.toHaveBeenCalled();
+
+        expect(invalidateAliasCache).toHaveBeenCalledWith('user1');
     });
 
     it('should reject deletion of form belonging to another user', async () => {

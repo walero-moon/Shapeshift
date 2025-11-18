@@ -1,6 +1,7 @@
 import { formRepo } from '../infra/FormRepo';
 import { aliasRepo } from '../infra/AliasRepo';
 import { normalizeAlias, getAliasKind } from './NormalizeAlias';
+import { invalidateAliasCache } from '../../proxy/app/MatchAlias';
 import log from '../../../shared/utils/logger';
 
 export interface AddAliasInput {
@@ -70,6 +71,9 @@ export async function addAlias(formId: string, userId: string, input: AddAliasIn
             triggerNorm,
             kind,
         });
+
+        // Ensure future proxy attempts pull the new alias
+        invalidateAliasCache(userId);
 
         return {
             id: alias.id,
