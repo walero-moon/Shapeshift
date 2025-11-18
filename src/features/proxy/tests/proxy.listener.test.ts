@@ -65,7 +65,6 @@ import { formRepo } from '../../../features/identity/infra/FormRepo';
 import { DiscordChannelProxy } from '../../../adapters/discord/DiscordChannelProxy';
 import { reuploadAttachments } from '../../../shared/utils/attachments';
 import { handleDegradedModeError } from '../../../shared/utils/errorHandling';
-import { recordLatchedForm } from '../../../features/proxy/app/autoproxy/RecordLatchedForm';
 import { getAutoproxyState } from '../../../features/proxy/app/autoproxy/GetAutoproxyState';
 
 describe('messageCreateProxy function', () => {
@@ -180,25 +179,8 @@ describe('messageCreateProxy function', () => {
             'delete proxied source'
         );
         expect(mockMessage.delete).toHaveBeenCalled();
-        expect(recordLatchedForm).toHaveBeenCalledTimes(3);
-        expect(recordLatchedForm).toHaveBeenNthCalledWith(1, {
-            userId: 'user123',
-            formId: 'form1',
-            guildId: 'guild789',
-            channelId: 'channel456',
-        });
-        expect(recordLatchedForm).toHaveBeenNthCalledWith(2, {
-            userId: 'user123',
-            formId: 'form1',
-            guildId: 'guild789',
-            channelId: null,
-        });
-        expect(recordLatchedForm).toHaveBeenNthCalledWith(3, {
-            userId: 'user123',
-            formId: 'form1',
-            guildId: null,
-            channelId: null,
-        });
+        const optionsArg = vi.mocked(proxyCoordinator).mock.calls[0]?.[11];
+        expect(optionsArg).toEqual({ recordLatch: true });
     });
 
     it('should skip proxying if user lacks permissions', async () => {
@@ -319,7 +301,8 @@ describe('messageCreateProxy function', () => {
             undefined,
             mockForm,
             null,
-            'message123'
+            'message123',
+            { recordLatch: true }
         );
     });
 
@@ -370,9 +353,9 @@ describe('messageCreateProxy function', () => {
             undefined,
             mockForm,
             null,
-            'message123'
+            'message123',
+            { recordLatch: false }
         );
-        expect(recordLatchedForm).not.toHaveBeenCalled();
     });
 
     it('should handle form not found', async () => {
@@ -560,7 +543,8 @@ describe('messageCreateProxy function', () => {
             undefined,
             mockForm,
             null,
-            'message123'
+            'message123',
+            { recordLatch: true }
         );
     });
 });

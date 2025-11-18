@@ -4,7 +4,6 @@ import { matchAlias } from '../../../features/proxy/app/MatchAlias';
 import { validateUserChannelPerms } from '../../../features/proxy/app/ValidateUserChannelPerms';
 import { proxyCoordinator } from '../../../features/proxy/app/ProxyCoordinator';
 import { formRepo } from '../../../features/identity/infra/FormRepo';
-import { recordLatchedForm } from '../../../features/proxy/app/autoproxy/RecordLatchedForm';
 import { getAutoproxyState } from '../../../features/proxy/app/autoproxy/GetAutoproxyState';
 import { DiscordChannelProxy } from '../DiscordChannelProxy';
 import { client } from '../client';
@@ -426,7 +425,8 @@ export async function messageCreateProxy(message: Message) {
             replyTo,
             form,
             replyMessage,
-            message.id
+            message.id,
+            { recordLatch: proxySource === 'alias' }
         );
         const proxySendDuration = performance.now() - proxySendStart;
         log.debug('Proxy stage complete', {
@@ -438,27 +438,7 @@ export async function messageCreateProxy(message: Message) {
             channelId: message.channelId
         });
 
-        if (proxySource === 'alias') {
-            // Update latch history for this user (channel, guild, global scopes)
-            await recordLatchedForm({
-                userId: message.author.id,
-                formId: form.id,
-                guildId: message.guildId,
-                channelId: message.channelId
-            });
-            await recordLatchedForm({
-                userId: message.author.id,
-                formId: form.id,
-                guildId: message.guildId,
-                channelId: null
-            });
-            await recordLatchedForm({
-                userId: message.author.id,
-                formId: form.id,
-                guildId: null,
-                channelId: null
-            });
-        }
+        // (Latch recording handled in proxyCoordinator when recordLatch option is enabled)
 
         // Handle large attachments with follow-up edits
         if (largeAttachments.length > 0) {

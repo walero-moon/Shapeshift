@@ -6,6 +6,11 @@ import { generateUuidv7OrUndefined } from '../../../shared/db/uuidDetection';
 import { log } from '../../../shared/utils/logger';
 import { handleDegradedModeError } from '../../../shared/utils/errorHandling';
 import { Message } from 'discord.js';
+import { recordLatchedForm } from './autoproxy/RecordLatchedForm';
+
+interface ProxyCoordinatorOptions {
+    recordLatch?: boolean;
+}
 
 /**
  * Orchestrates the proxying process: fetch form, build payload, send via port, persist proxied message asynchronously.
@@ -23,7 +28,8 @@ export async function proxyCoordinator(
     _replyTo?: { guildId: string; channelId: string; messageId: string },
     form?: Form,
     _replyMessage?: Message,
-    sourceMessageId?: string
+    sourceMessageId?: string,
+    options?: ProxyCoordinatorOptions
 ): Promise<{ webhookId: string; token: string; messageId: string }> {
     try {
         log.info('Starting proxy coordination', {
@@ -131,6 +137,29 @@ export async function proxyCoordinator(
             undefined, // fallback, since void
             'proxied_message_insert'
         );
+
+        if (options?.recordLatch) {
+            await Promise.all([
+                recordLatchedForm({
+                    userId,
+                    formId,
+                    guildId,
+                    channelId
+                }),
+                recordLatchedForm({
+                    userId,
+                    formId,
+                    guildId,
+                    channelId: null
+                }),
+                recordLatchedForm({
+                    userId,
+                    formId,
+                    guildId: null,
+                    channelId: null
+                })
+            ]);
+        }
 
         return {
             webhookId: sendResult.webhookId,

@@ -166,7 +166,8 @@ export const command = {
                 undefined,
                 form,
                 undefined,
-                undefined
+                undefined,
+                { recordLatch: true }
             );
 
             // Confirm with link to the message

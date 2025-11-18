@@ -124,7 +124,8 @@ export async function proxyMessageContext(
             undefined, // no reply
             resolvedForm,
             undefined,
-            sourceMessageId
+            sourceMessageId,
+            { recordLatch: true }
         );
 
         log.info('Proxy message context successful', {

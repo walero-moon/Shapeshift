@@ -6,6 +6,7 @@ import { proxiedMessageRepo } from '../infra/ProxiedMessageRepo';
 import { generateUuidv7OrUndefined } from '../../../shared/db/uuidDetection';
 import { log } from '../../../shared/utils/logger';
 import { handleDegradedModeError } from '../../../shared/utils/errorHandling';
+import { recordLatchedForm } from '../app/autoproxy/RecordLatchedForm';
 import { Form } from '../../identity/infra/FormRepo';
 
 // Mock dependencies
@@ -40,12 +41,17 @@ vi.mock('../../../shared/utils/errorHandling', () => ({
     handleDegradedModeError: vi.fn(),
 }));
 
+vi.mock('../app/autoproxy/RecordLatchedForm', () => ({
+    recordLatchedForm: vi.fn(() => Promise.resolve({ success: true })),
+}));
+
 describe('proxyCoordinator function', () => {
     let mockChannelProxy: Mocked<ChannelProxyPort>;
     let mockForm: Form;
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(recordLatchedForm).mockResolvedValue({ success: true });
 
         mockChannelProxy = {
             send: vi.fn(),
@@ -355,6 +361,50 @@ describe('proxyCoordinator function', () => {
             allowedMentions: { parse: [], repliedUser: false },
             avatarUrl: 'https://example.com/avatar.png',
         }, undefined);
+    });
+
+    it('records latch when option enabled', async () => {
+        const mockSendResult = {
+            webhookId: 'webhook123',
+            webhookToken: 'token456',
+            messageId: 'msg789',
+        };
+        mockChannelProxy.send.mockResolvedValue(mockSendResult);
+
+        await proxyCoordinator(
+            'user1',
+            'form1',
+            'channel1',
+            'guild1',
+            'Hello world!',
+            mockChannelProxy,
+            undefined,
+            undefined,
+            mockForm,
+            undefined,
+            undefined,
+            { recordLatch: true }
+        );
+
+        expect(recordLatchedForm).toHaveBeenCalledTimes(3);
+        expect(recordLatchedForm).toHaveBeenNthCalledWith(1, {
+            userId: 'user1',
+            formId: 'form1',
+            guildId: 'guild1',
+            channelId: 'channel1'
+        });
+        expect(recordLatchedForm).toHaveBeenNthCalledWith(2, {
+            userId: 'user1',
+            formId: 'form1',
+            guildId: 'guild1',
+            channelId: null
+        });
+        expect(recordLatchedForm).toHaveBeenNthCalledWith(3, {
+            userId: 'user1',
+            formId: 'form1',
+            guildId: null,
+            channelId: null
+        });
     });
 
     it('should handle pre-fetched form with null avatar', async () => {
