@@ -5,6 +5,7 @@ import { validateUserChannelPerms } from '../../../features/proxy/app/ValidateUs
 import { proxyCoordinator } from '../../../features/proxy/app/ProxyCoordinator';
 import { formRepo } from '../../../features/identity/infra/FormRepo';
 import { recordLatchedForm } from '../../../features/proxy/app/autoproxy/RecordLatchedForm';
+import { getAutoproxyState } from '../../../features/proxy/app/autoproxy/GetAutoproxyState';
 import { DiscordChannelProxy } from '../DiscordChannelProxy';
 import { client } from '../client';
 import { log } from '../../../shared/utils/logger';
@@ -226,7 +227,14 @@ export async function messageCreateProxy(message: Message) {
             }
         }
 
+        let proxySource: 'alias' | 'autoproxy' | null = null;
+        let proxyContent: string | null = null;
+        let activeAutoproxyState: Awaited<ReturnType<typeof getAutoproxyState>>['state'] | null = null;
+
         if (match) {
+            proxySource = 'alias';
+            proxyContent = match.renderedText;
+
             const aliasMatchDuration = performance.now() - proxyStart;
             log.debug('Proxy stage complete', {
                 stage: 'aliasMatch',
@@ -241,28 +249,82 @@ export async function messageCreateProxy(message: Message) {
                 component: 'proxy',
                 userId: message.author.id,
                 contentLength: message.content.length,
-                matchFound: !!match,
-                aliasId: match?.alias.id,
-                renderedTextLength: match?.renderedText.length,
-                status: match ? 'match_found' : 'no_match'
+                matchFound: true,
+                aliasId: match.alias.id,
+                renderedTextLength: match.renderedText.length,
+                status: 'match_found'
             });
         }
 
         if (!match) {
-            log.debug('No alias match found, skipping proxy', {
+            const autoproxyResult = await getAutoproxyState({
+                userId: message.author.id,
+                guildId: message.guildId,
+                channelId: message.channelId
+            });
+
+            activeAutoproxyState = autoproxyResult.state;
+
+            if (!activeAutoproxyState) {
+                log.debug('No alias or autoproxy match found, skipping proxy', {
+                    component: 'proxy',
+                    userId: message.author.id,
+                    status: 'skipped_no_match'
+                });
+                return;
+            }
+
+            const autoproxyFormId = activeAutoproxyState.mode === 'form'
+                ? activeAutoproxyState.formId
+                : activeAutoproxyState.lastFormId;
+
+            if (!autoproxyFormId) {
+                log.info('Autoproxy state pending latch', {
+                    component: 'proxy',
+                    userId: message.author.id,
+                    guildId: message.guildId || undefined,
+                    channelId: message.channelId,
+                    mode: activeAutoproxyState.mode,
+                    status: 'autoproxy_pending'
+                });
+                return;
+            }
+
+            form = await formRepo.getCachedByUserAndId(message.author.id, autoproxyFormId);
+            if (!form) {
+                log.warn('Autoproxy form not found', {
+                    component: 'proxy',
+                    userId: message.author.id,
+                    guildId: message.guildId || undefined,
+                    channelId: message.channelId,
+                    formId: autoproxyFormId,
+                    status: 'autoproxy_form_missing'
+                });
+                return;
+            }
+
+            proxySource = 'autoproxy';
+            proxyContent = message.content;
+
+            log.info('Autoproxy state hit', {
                 component: 'proxy',
                 userId: message.author.id,
-                status: 'skipped_no_match'
+                guildId: message.guildId || undefined,
+                channelId: message.channelId,
+                mode: activeAutoproxyState.mode,
+                stateId: activeAutoproxyState.id,
+                status: 'autoproxy_hit'
             });
-            return;
         }
 
         if (!form) {
-            log.warn('Form not found after parallel fetch', {
+            log.warn(proxySource === 'autoproxy' ? 'Autoproxy form not found' : 'Form not found after parallel fetch', {
                 component: 'proxy',
                 userId: message.author.id,
-                aliasId: match.alias.id,
-                formId: match.alias.formId,
+                guildId: message.guildId || undefined,
+                channelId: message.channelId,
+                aliasId: match?.alias.id,
+                formId: match?.alias.formId,
                 status: 'form_not_found'
             });
             return;
@@ -351,12 +413,14 @@ export async function messageCreateProxy(message: Message) {
 
         // Proxy the message via coordinator with standardized attachments
         const proxySendStart = performance.now();
+        const messageBody = proxyContent ?? (match ? match.renderedText : message.content);
+
         const proxyResult = await proxyCoordinator(
             message.author.id,
             form.id,
             message.channelId,
             message.guildId,
-            match.renderedText,
+            messageBody,
             channelProxy,
             standardizedAttachments,
             replyTo,
@@ -374,25 +438,27 @@ export async function messageCreateProxy(message: Message) {
             channelId: message.channelId
         });
 
-        // Update latch history for this user (channel, guild, global scopes)
-        await recordLatchedForm({
-            userId: message.author.id,
-            formId: form.id,
-            guildId: message.guildId,
-            channelId: message.channelId
-        });
-        await recordLatchedForm({
-            userId: message.author.id,
-            formId: form.id,
-            guildId: message.guildId,
-            channelId: null
-        });
-        await recordLatchedForm({
-            userId: message.author.id,
-            formId: form.id,
-            guildId: null,
-            channelId: null
-        });
+        if (proxySource === 'alias') {
+            // Update latch history for this user (channel, guild, global scopes)
+            await recordLatchedForm({
+                userId: message.author.id,
+                formId: form.id,
+                guildId: message.guildId,
+                channelId: message.channelId
+            });
+            await recordLatchedForm({
+                userId: message.author.id,
+                formId: form.id,
+                guildId: message.guildId,
+                channelId: null
+            });
+            await recordLatchedForm({
+                userId: message.author.id,
+                formId: form.id,
+                guildId: null,
+                channelId: null
+            });
+        }
 
         // Handle large attachments with follow-up edits
         if (largeAttachments.length > 0) {
@@ -414,7 +480,7 @@ export async function messageCreateProxy(message: Message) {
 
                 if (largeAttachmentBuffers.length > 0) {
                     const editData = {
-                        content: match.renderedText, // Use the rendered text content
+                        content: messageBody, // Use the rendered text content
                         attachments: [...standardizedAttachments, ...largeAttachmentBuffers],
                         allowedMentions: { parse: [] } // Default to no pings
                     };
@@ -441,11 +507,13 @@ export async function messageCreateProxy(message: Message) {
             }, undefined, 'follow_up_attachment_edits');
         }
 
-        log.info('Message proxied successfully via tag', {
+        log.info(proxySource === 'autoproxy' ? 'Message proxied via autoproxy' : 'Message proxied successfully via tag', {
             component: 'proxy',
             userId: message.author.id,
             formId: form.id,
-            aliasId: match.alias.id,
+            aliasId: match?.alias.id,
+            autoproxyStateId: activeAutoproxyState?.id,
+            autoproxyMode: activeAutoproxyState?.mode,
             guildId: message.guildId || undefined,
             channelId: message.channelId,
             status: 'proxy_success'

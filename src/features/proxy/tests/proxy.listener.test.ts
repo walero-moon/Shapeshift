@@ -53,6 +53,10 @@ vi.mock('../../../features/proxy/app/autoproxy/RecordLatchedForm', () => ({
     recordLatchedForm: vi.fn(() => Promise.resolve({ success: true })),
 }));
 
+vi.mock('../../../features/proxy/app/autoproxy/GetAutoproxyState', () => ({
+    getAutoproxyState: vi.fn(() => Promise.resolve({ success: true, state: null })),
+}));
+
 // Import after mocking
 import { matchAlias, clearAliasCache } from '../../../features/proxy/app/MatchAlias';
 import { validateUserChannelPerms } from '../../../features/proxy/app/ValidateUserChannelPerms';
@@ -62,6 +66,7 @@ import { DiscordChannelProxy } from '../../../adapters/discord/DiscordChannelPro
 import { reuploadAttachments } from '../../../shared/utils/attachments';
 import { handleDegradedModeError } from '../../../shared/utils/errorHandling';
 import { recordLatchedForm } from '../../../features/proxy/app/autoproxy/RecordLatchedForm';
+import { getAutoproxyState } from '../../../features/proxy/app/autoproxy/GetAutoproxyState';
 
 describe('messageCreateProxy function', () => {
     let mockMessage: Message<boolean>;
@@ -70,6 +75,7 @@ describe('messageCreateProxy function', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         clearAliasCache();
+        vi.mocked(getAutoproxyState).mockResolvedValue({ success: true, state: null });
 
         mockMessage = {
             id: 'message123',
@@ -315,6 +321,58 @@ describe('messageCreateProxy function', () => {
             null,
             'message123'
         );
+    });
+
+    it('should fallback to autoproxy when no alias match', async () => {
+        const autoproxyState = {
+            id: 'state1',
+            userId: 'user123',
+            guildId: 'guild789',
+            channelId: null,
+            mode: 'form' as const,
+            formId: 'form1',
+            lastFormId: null,
+            expiresAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        };
+
+        const mockForm = {
+            id: 'form1',
+            userId: 'user123',
+            name: 'Neoli',
+            avatarUrl: null,
+            createdAt: new Date(),
+        };
+
+        vi.mocked(matchAlias).mockResolvedValue(null);
+        vi.mocked(getAutoproxyState).mockResolvedValue({ success: true, state: autoproxyState });
+        vi.mocked(formRepo.getCachedByUserAndId).mockResolvedValue(mockForm);
+        vi.mocked(validateUserChannelPerms).mockResolvedValue(true);
+        vi.mocked(proxyCoordinator).mockResolvedValue({
+            webhookId: 'webhook123',
+            token: 'token456',
+            messageId: 'msg789',
+        });
+
+        mockMessage.content = 'plain message';
+
+        await messageCreateProxy(mockMessage);
+
+        expect(proxyCoordinator).toHaveBeenCalledWith(
+            'user123',
+            'form1',
+            'channel456',
+            'guild789',
+            'plain message',
+            expect.any(Object),
+            expect.any(Array),
+            undefined,
+            mockForm,
+            null,
+            'message123'
+        );
+        expect(recordLatchedForm).not.toHaveBeenCalled();
     });
 
     it('should handle form not found', async () => {
