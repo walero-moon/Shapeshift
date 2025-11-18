@@ -25,18 +25,47 @@ export async function recordLatchedForm(input: RecordLatchedFormInput): Promise<
     try {
         const { userId, formId, guildId, channelId } = input;
 
-        // Update latch states with retry to handle conflicts
-        await retryAsync(
-            () => autoproxyRepo.recordLatch(userId, formId, guildId, channelId),
-            {
-                maxAttempts: 3,
-                baseDelay: 100,
-                maxDelay: 1000,
-                backoffFactor: 2,
-                component: 'proxy',
-                operation: 'record_latch',
+        const states = await autoproxyRepo.getAllStates(userId);
+        const targets = states.filter((state) => {
+            if (state.mode !== 'latch') {
+                return false;
             }
-        );
+
+            // Channel-specific update
+            if (channelId) {
+                return state.channelId === channelId;
+            }
+
+            // Guild-specific update (channelId null but guild provided)
+            if (!channelId && guildId) {
+                return !state.channelId && state.guildId === guildId;
+            }
+
+            // Global update (neither guild nor channel provided)
+            if (!channelId && !guildId) {
+                return !state.channelId && !state.guildId;
+            }
+
+            return false;
+        });
+
+        if (targets.length === 0) {
+            return { success: true };
+        }
+
+        await Promise.all(targets.map((state) =>
+            retryAsync(
+                () => autoproxyRepo.recordLatchById(state.id, formId),
+                {
+                    maxAttempts: 3,
+                    baseDelay: 100,
+                    maxDelay: 1000,
+                    backoffFactor: 2,
+                    component: 'proxy',
+                    operation: 'record_latch',
+                }
+            )
+        ));
 
         log.debug('Latched form recorded', {
             component: 'autoproxy',
@@ -44,6 +73,7 @@ export async function recordLatchedForm(input: RecordLatchedFormInput): Promise<
             formId,
             guildId: guildId || undefined,
             channelId: channelId || undefined,
+            updatedStates: targets.map((state) => state.id),
             status: 'latch_recorded'
         });
 

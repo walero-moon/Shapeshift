@@ -36,6 +36,7 @@ export interface AutoproxyRepo {
     clearState(userId: string, guildId?: string | null, channelId?: string | null): Promise<void>;
     clearAll(userId: string): Promise<void>;
     recordLatch(userId: string, lastFormId: string, guildId?: string | null, channelId?: string | null): Promise<void>;
+    recordLatchById(id: string, lastFormId: string): Promise<void>;
     deleteMissingForm(): Promise<void>;
 }
 
@@ -274,6 +275,27 @@ export class DrizzleAutoproxyRepo implements AutoproxyRepo {
         } catch (error) {
             log.error('Failed to delete autoproxy states with missing forms', {
                 component: 'proxy',
+                status: 'database_error',
+                error
+            });
+            throw error;
+        }
+    }
+
+    async recordLatchById(id: string, lastFormId: string): Promise<void> {
+        try {
+            await db
+                .update(autoproxyStates)
+                .set({
+                    lastFormId,
+                    updatedAt: sql`now()`,
+                })
+                .where(eq(autoproxyStates.id, id));
+        } catch (error) {
+            log.error('Failed to record latch form by id', {
+                component: 'proxy',
+                autoproxyStateId: id,
+                lastFormId,
                 status: 'database_error',
                 error
             });

@@ -42,6 +42,7 @@ vi.mock('../infra/AutoproxyRepo', () => ({
         clearState: vi.fn(),
         clearAll: vi.fn(),
         recordLatch: vi.fn(),
+        recordLatchById: vi.fn(),
         deleteMissingForm: vi.fn(),
     },
 }));
@@ -324,33 +325,104 @@ describe('Autoproxy Application Use Cases', () => {
     });
 
     describe('recordLatchedForm', () => {
-        it('should record latched form successfully', async () => {
-            mockAutoproxyRepo.recordLatch.mockResolvedValue();
+        const states = [
+            {
+                id: 'state-channel',
+                userId: 'user1',
+                guildId: 'guild1',
+                channelId: 'channel1',
+                mode: 'latch' as const,
+                formId: null,
+                lastFormId: null,
+                expiresAt: null,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            },
+            {
+                id: 'state-guild',
+                userId: 'user1',
+                guildId: 'guild1',
+                channelId: null,
+                mode: 'latch' as const,
+                formId: null,
+                lastFormId: null,
+                expiresAt: null,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            },
+            {
+                id: 'state-global',
+                userId: 'user1',
+                guildId: null,
+                channelId: null,
+                mode: 'latch' as const,
+                formId: null,
+                lastFormId: null,
+                expiresAt: null,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }
+        ];
 
-            const input: RecordLatchedFormInput = {
+        beforeEach(() => {
+            mockAutoproxyRepo.recordLatchById.mockReset();
+        });
+
+        it('updates channel scope states', async () => {
+            mockAutoproxyRepo.getAllStates.mockResolvedValue(states as any);
+
+            const result = await recordLatchedForm({
                 userId: 'user1',
                 formId: 'form1',
                 guildId: 'guild1',
                 channelId: 'channel1',
-            };
-
-            const result = await recordLatchedForm(input);
+            });
 
             expect(result.success).toBe(true);
-            expect(mockAutoproxyRepo.recordLatch).toHaveBeenCalledWith('user1', 'form1', 'guild1', 'channel1');
+            expect(mockAutoproxyRepo.recordLatchById).toHaveBeenCalledWith('state-channel', 'form1');
+            expect(mockAutoproxyRepo.recordLatchById).toHaveBeenCalledTimes(1);
+        });
+
+        it('updates guild scope states', async () => {
+            mockAutoproxyRepo.getAllStates.mockResolvedValue(states as any);
+
+            const result = await recordLatchedForm({
+                userId: 'user1',
+                formId: 'form1',
+                guildId: 'guild1',
+                channelId: null,
+            });
+
+            expect(result.success).toBe(true);
+            expect(mockAutoproxyRepo.recordLatchById).toHaveBeenCalledWith('state-guild', 'form1');
+            expect(mockAutoproxyRepo.recordLatchById).toHaveBeenCalledTimes(1);
+        });
+
+        it('updates global scope states', async () => {
+            mockAutoproxyRepo.getAllStates.mockResolvedValue(states as any);
+
+            const result = await recordLatchedForm({
+                userId: 'user1',
+                formId: 'form1',
+                guildId: null,
+                channelId: null,
+            });
+
+            expect(result.success).toBe(true);
+            expect(mockAutoproxyRepo.recordLatchById).toHaveBeenCalledWith('state-global', 'form1');
+            expect(mockAutoproxyRepo.recordLatchById).toHaveBeenCalledTimes(1);
         });
 
         it('should not throw on record failure (non-critical)', async () => {
-            mockAutoproxyRepo.recordLatch.mockRejectedValue(new Error('DB error'));
+            mockAutoproxyRepo.getAllStates.mockResolvedValue(states as any);
+            mockAutoproxyRepo.recordLatchById.mockRejectedValue(new Error('DB error'));
 
-            const input: RecordLatchedFormInput = {
+            const result = await recordLatchedForm({
                 userId: 'user1',
                 formId: 'form1',
                 guildId: 'guild1',
                 channelId: 'channel1',
-            };
-
-            const result = await recordLatchedForm(input);
+            });
 
             expect(result.success).toBe(true); // Still returns success
         });
