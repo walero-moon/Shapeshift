@@ -87,9 +87,7 @@ describe('AutoproxyRepo', () => {
             mockDb.insert.mockReturnValue({
                 values: vi.fn().mockReturnValue({
                     onConflictDoUpdate: vi.fn().mockReturnValue({
-                        set: vi.fn().mockReturnValue({
-                            returning: vi.fn().mockResolvedValue([mockState]),
-                        }),
+                        returning: vi.fn().mockResolvedValue([mockState]),
                     }),
                 }),
             });
@@ -108,9 +106,7 @@ describe('AutoproxyRepo', () => {
             mockDb.insert.mockReturnValue({
                 values: vi.fn().mockReturnValue({
                     onConflictDoUpdate: vi.fn().mockReturnValue({
-                        set: vi.fn().mockReturnValue({
-                            returning: vi.fn().mockResolvedValue([]),
-                        }),
+                        returning: vi.fn().mockResolvedValue([]),
                     }),
                 }),
             });
@@ -138,7 +134,8 @@ describe('AutoproxyRepo', () => {
                 updatedAt: new Date()
             };
 
-            const orderByFn = vi.fn().mockResolvedValue([mockState]);
+            const limitFn = vi.fn().mockResolvedValue([mockState]);
+            const orderByFn = vi.fn().mockReturnValue({ limit: limitFn });
             const whereFn = vi.fn().mockReturnValue({ orderBy: orderByFn });
             mockDb.select.mockReturnValue({
                 from: vi.fn().mockReturnValue({
@@ -152,7 +149,8 @@ describe('AutoproxyRepo', () => {
         });
 
         it('should return null when no state is found', async () => {
-            const orderByFn = vi.fn().mockResolvedValue([]);
+            const limitFn = vi.fn().mockResolvedValue([]);
+            const orderByFn = vi.fn().mockReturnValue({ limit: limitFn });
             const whereFn = vi.fn().mockReturnValue({ orderBy: orderByFn });
             mockDb.select.mockReturnValue({
                 from: vi.fn().mockReturnValue({
@@ -225,9 +223,7 @@ describe('AutoproxyRepo', () => {
             mockDb.insert.mockReturnValue({
                 values: vi.fn().mockReturnValue({
                     onConflictDoUpdate: vi.fn().mockReturnValue({
-                        set: vi.fn().mockReturnValue({
-                            returning: vi.fn().mockRejectedValue(new Error('Database error')),
-                        }),
+                        returning: vi.fn().mockRejectedValue(new Error('Database error')),
                     }),
                 }),
             });

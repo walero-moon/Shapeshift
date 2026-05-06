@@ -99,7 +99,8 @@ describe('ProxyMessageContext - Attachments Integration', () => {
                 name: 'Test Form'
             }),
             undefined,
-            undefined
+            undefined,
+            { recordLatch: true }
         );
         expect(result.messageId).toBe('message-789');
     });
@@ -175,7 +176,8 @@ describe('ProxyMessageContext - Attachments Integration', () => {
                 name: 'Test Form'
             }),
             undefined,
-            undefined
+            undefined,
+            { recordLatch: true }
         );
         expect(result.messageId).toBe('message-789');
     });
@@ -246,7 +248,8 @@ describe('ProxyMessageContext - Attachments Integration', () => {
                 name: 'Test Form'
             }),
             undefined,
-            undefined
+            undefined,
+            { recordLatch: true }
         );
         expect(result.messageId).toBe('message-789');
     });
@@ -315,7 +318,8 @@ describe('ProxyMessageContext - Attachments Integration', () => {
                 name: 'Test Form'
             }),
             undefined,
-            undefined
+            undefined,
+            { recordLatch: true }
         );
         expect(result.messageId).toBe('message-789');
     });
@@ -384,7 +388,8 @@ describe('ProxyMessageContext - Attachments Integration', () => {
                 name: 'Test Form'
             }),
             undefined,
-            undefined
+            undefined,
+            { recordLatch: true }
         );
         expect(result.messageId).toBe('message-789');
     });

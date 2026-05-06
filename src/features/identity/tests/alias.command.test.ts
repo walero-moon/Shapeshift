@@ -142,7 +142,7 @@ describe('alias add', () => {
 
         expect(mockInteraction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
-            content: 'An unexpected error occurred. Please try again later.',
+            content: '❌ Alias trigger must contain the literal word "text". For example: `neoli:text` or `{text}`.',
             allowedMentions: { parse: [], repliedUser: false }
         });
     });
@@ -191,7 +191,7 @@ describe('alias add', () => {
         await addExecute(mockInteraction as unknown as ChatInputCommandInteraction);
 
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
-            content: 'An unexpected error occurred. Please try again later.',
+            content: '❌ Alias "n:text" already exists for this user',
             allowedMentions: { parse: [], repliedUser: false }
         });
     });

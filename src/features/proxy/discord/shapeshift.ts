@@ -129,7 +129,7 @@ export const command = {
             switch (subcommand) {
                 case 'form': {
                     const formId = interaction.options.getString('form', true);
-                    const result = await setAutoproxyState({
+                    await setAutoproxyState({
                         userId,
                         mode: 'form',
                         formId,
@@ -285,12 +285,26 @@ export async function handleButtonInteraction(interaction: ButtonInteraction): P
 
         if (action === 'clear') {
             const stateId = parts[2];
+            if (!stateId) {
+                await interaction.editReply({
+                    content: 'Invalid autoproxy action.',
+                    allowedMentions: DEFAULT_ALLOWED_MENTIONS
+                });
+                return;
+            }
             await handleClearButton(interaction, stateId);
             return;
         }
 
         if (action === 'switch') {
             const stateId = parts[2];
+            if (!stateId) {
+                await interaction.editReply({
+                    content: 'Invalid autoproxy action.',
+                    allowedMentions: DEFAULT_ALLOWED_MENTIONS
+                });
+                return;
+            }
             await handleSwitchButton(interaction, stateId);
             return;
         }
@@ -343,6 +357,13 @@ export async function handleSelectInteraction(interaction: StringSelectMenuInter
 
     const stateId = interaction.customId.split(':')[2];
     const selectedFormId = interaction.values[0];
+    if (!stateId || !selectedFormId) {
+        await interaction.update({
+            content: 'Invalid autoproxy selection.',
+            components: []
+        });
+        return;
+    }
 
     try {
         const state = await autoproxyRepo.getStateById(stateId);

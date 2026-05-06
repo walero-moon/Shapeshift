@@ -5,23 +5,8 @@ exports[`assembleWebhookPayload > should assemble payload with reply-style 1`] =
   "allowedMentions": {
     "parse": [],
   },
-  "components": [
-    {
-      "components": [
-        {
-          "emoji": undefined,
-          "label": "Jump",
-          "style": 5,
-          "type": 2,
-          "url": "https://discord.com/channels/123/456/789",
-        },
-      ],
-      "type": 1,
-    },
-  ],
+  "components": [],
   "content": "*↩︎ Replying to @User*
-> This is a quote
-
 Hello world",
 }
 `;
@@ -33,8 +18,6 @@ exports[`assembleWebhookPayload > should assemble payload with reply-style but n
   },
   "components": [],
   "content": "*↩︎ Replying to @User*
-> This is a quote
-
 Hello world",
 }
 `;
