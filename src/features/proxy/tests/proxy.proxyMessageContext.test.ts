@@ -80,7 +80,8 @@ describe('proxyMessageContext', () => {
                 name: 'Test Form'
             }),
             undefined,
-            'source-1'
+            'source-1',
+            { recordLatch: true }
         );
         expect(result).toEqual({
             webhookId: 'webhook-123',
@@ -156,7 +157,8 @@ describe('proxyMessageContext', () => {
                 name: 'Test Form'
             }),
             undefined,
-            'source-1'
+            'source-1',
+            { recordLatch: true }
         );
     });
 
@@ -290,7 +292,8 @@ describe('proxyMessageContext', () => {
                 name: 'Test Form'
             }),
             undefined,
-            'source-1'
+            'source-1',
+            { recordLatch: true }
         );
     });
 });

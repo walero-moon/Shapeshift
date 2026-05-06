@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setAutoproxyState, SetAutoproxyStateInput } from '../app/autoproxy/SetAutoproxyState';
 import { getAutoproxyState, GetAutoproxyStateInput } from '../app/autoproxy/GetAutoproxyState';
 import { clearAutoproxyState, ClearAutoproxyStateInput } from '../app/autoproxy/ClearAutoproxyState';
-import { recordLatchedForm, RecordLatchedFormInput } from '../app/autoproxy/RecordLatchedForm';
+import { recordLatchedForm } from '../app/autoproxy/RecordLatchedForm';
 import { autoproxyRepo } from '../infra/AutoproxyRepo';
 import { formRepo } from '../../identity/infra/FormRepo';
 

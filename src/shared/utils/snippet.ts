@@ -18,8 +18,8 @@ export function createSnippet(message: { content?: string; embeds?: unknown[]; a
     text = text.replace(/__(.*?)__/g, '$1'); // underline
     text = text.replace(/_(.*?)_/g, '$1'); // italic
     text = text.replace(/~~(.*?)~~/g, '$1'); // strikethrough
-    text = text.replace(/`(.*?)`/g, '$1'); // inline code
     text = text.replace(/```[\s\S]*?```/g, ''); // code blocks
+    text = text.replace(/`(.*?)`/g, '$1'); // inline code
 
     // Collapse whitespace
     text = text.replace(/\s+/g, ' ').trim();

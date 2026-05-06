@@ -137,6 +137,10 @@ describe('form edit modal submit', () => {
             createdAt: new Date(),
         };
 
+        vi.mocked(listForms).mockResolvedValue([
+            { id: 'form1', name: 'Old Name', avatarUrl: null, createdAt: new Date(), aliases: [] }
+        ]);
+
         vi.mocked(editForm).mockResolvedValue(mockForm);
 
         const mockInteraction = {
@@ -147,7 +151,7 @@ describe('form edit modal submit', () => {
                     .mockReturnValueOnce('Updated Name')
                     .mockReturnValueOnce('https://example.com/avatar.png'),
             },
-            deferUpdate: vi.fn(),
+            deferReply: vi.fn(),
             editReply: vi.fn(),
         };
 
@@ -158,7 +162,7 @@ describe('form edit modal submit', () => {
             avatarUrl: 'https://example.com/avatar.png',
         });
 
-        expect(mockInteraction.deferUpdate).toHaveBeenCalled();
+        expect(mockInteraction.deferReply).toHaveBeenCalled();
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
             content: expect.stringContaining('✅ Form updated successfully!'),
             allowedMentions: { parse: [], repliedUser: false },
@@ -172,6 +176,9 @@ describe('form edit modal submit', () => {
             avatarUrl: null,
             createdAt: new Date(),
         });
+        vi.mocked(listForms).mockResolvedValue([
+            { id: 'form1', name: 'Name', avatarUrl: null, createdAt: new Date(), aliases: [] }
+        ]);
 
         const mockInteraction = {
             customId: 'edit_form:form1',
@@ -181,14 +188,14 @@ describe('form edit modal submit', () => {
                     .mockReturnValueOnce('Name')
                     .mockReturnValueOnce(''),
             },
-            deferUpdate: vi.fn(),
+            deferReply: vi.fn(),
             editReply: vi.fn(),
         };
 
         await handleModalSubmit(mockInteraction as unknown as ModalSubmitInteraction);
 
-        // deferUpdate is called first, which acknowledges the interaction
-        expect(mockInteraction.deferUpdate).toHaveBeenCalled();
+        // deferReply is called first, which acknowledges the interaction
+        expect(mockInteraction.deferReply).toHaveBeenCalled();
     });
 });
 
@@ -265,7 +272,7 @@ describe('3s rule compliance for form edit', () => {
         vi.clearAllMocks();
     });
 
-    it('should deferUpdate when editForm takes >3s, then editReply', async () => {
+    it('should deferReply when editForm takes >3s, then editReply', async () => {
         vi.mocked(listForms).mockResolvedValue([
             { id: 'form1', name: 'Old Name', avatarUrl: null, createdAt: new Date(), aliases: [] }
         ]);
@@ -282,13 +289,13 @@ describe('3s rule compliance for form edit', () => {
             fields: {
                 getTextInputValue: vi.fn().mockReturnValueOnce('New Name').mockReturnValueOnce(''),
             },
-            deferUpdate: vi.fn(),
+            deferReply: vi.fn(),
             editReply: vi.fn(),
         };
 
         await handleModalSubmit(mockInteraction as unknown as ModalSubmitInteraction);
 
-        expect(mockInteraction.deferUpdate).toHaveBeenCalled();
+        expect(mockInteraction.deferReply).toHaveBeenCalled();
         expect(mockInteraction.editReply).toHaveBeenCalled();
     });
 });
@@ -480,14 +487,15 @@ describe('form edit error handling', () => {
                     .mockReturnValueOnce('') // Empty name
                     .mockReturnValueOnce('https://example.com/avatar.png'),
             },
-            deferUpdate: vi.fn(),
+            deferred: false,
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
             reply: vi.fn(),
         };
 
         await handleModalSubmit(mockInteraction as unknown as ModalSubmitInteraction);
 
-        expect(mockInteraction.deferUpdate).toHaveBeenCalled();
+        expect(mockInteraction.deferReply).toHaveBeenCalled();
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
             content: 'Form name cannot be empty. Please provide a name for your form.',
             allowedMentions: { parse: [], repliedUser: false }
@@ -504,14 +512,15 @@ describe('form edit error handling', () => {
                     .mockReturnValueOnce('Updated Name')
                     .mockReturnValueOnce('ftp://invalid.com/avatar.png'), // Invalid protocol
             },
-            deferUpdate: vi.fn(),
+            deferred: false,
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
             reply: vi.fn(),
         };
 
         await handleModalSubmit(mockInteraction as unknown as ModalSubmitInteraction);
 
-        expect(mockInteraction.deferUpdate).toHaveBeenCalled();
+        expect(mockInteraction.deferReply).toHaveBeenCalled();
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
             content: 'Avatar URL must start with http:// or https://. For example: https://example.com/avatar.jpg',
             allowedMentions: { parse: [], repliedUser: false }
@@ -532,15 +541,15 @@ describe('form edit error handling', () => {
                     .mockReturnValueOnce(''),
             },
             deferred: false,
-            deferUpdate: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
         };
 
         await handleModalSubmit(mockInteraction as unknown as ModalSubmitInteraction);
 
-        expect(mockInteraction.deferUpdate).toHaveBeenCalled();
+        expect(mockInteraction.deferReply).toHaveBeenCalled();
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
-            content: 'An unexpected error occurred. Please try again later.',
+            content: 'Database constraint violation',
             allowedMentions: { parse: [], repliedUser: false }
         });
     });
@@ -572,13 +581,13 @@ describe('form edit error handling', () => {
                 getTextInputValue: vi.fn().mockReturnValueOnce('New Name').mockReturnValueOnce(''),
             },
             deferred: false,
-            deferUpdate: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
+            deferReply: vi.fn().mockImplementation(() => { mockInteraction.deferred = true; }),
             editReply: vi.fn(),
         };
 
         await handleModalSubmit(mockInteraction as unknown as ModalSubmitInteraction);
 
-        expect(mockInteraction.deferUpdate).toHaveBeenCalled();
+        expect(mockInteraction.deferReply).toHaveBeenCalled();
         expect(mockInteraction.editReply).toHaveBeenCalledWith({
             content: 'Form does not belong to user',
             allowedMentions: { parse: [], repliedUser: false }

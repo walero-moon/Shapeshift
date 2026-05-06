@@ -9,7 +9,9 @@ import { handleInteractionError } from '../../../shared/utils/errorHandling';
 // Mock dependencies
 vi.mock('../../identity/app/ListForms');
 vi.mock('../app/ProxyMessageContext');
-vi.mock('../../../adapters/discord/DiscordChannelProxy');
+vi.mock('../../../adapters/discord/DiscordChannelProxy', () => ({
+    getChannelProxy: vi.fn(),
+}));
 vi.mock('../../../shared/utils/logger');
 vi.mock('../../../shared/utils/errorHandling', () => ({
     handleInteractionError: vi.fn()

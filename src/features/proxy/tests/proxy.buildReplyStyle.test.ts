@@ -19,7 +19,8 @@ describe('buildReplyStyle', () => {
 
             const result = buildReplyStyle('JohnDoe', 'https://discord.com/channels/123/456/789', 'Hello', false, false);
 
-            expect(result.headerLine).toBe('-# ↩︎ **@JohnDoe** test snippet');
+            expect(result.headerLine).toBe('-# ↩︎ Replying to <@JohnDoe> **🡒** [test snippet](https://discord.com/channels/123/456/789)');
+            expect(result.allowedMentions).toEqual({ parse: ['users'], repliedUser: false });
         });
 
         it('should generate header with displayName only', () => {
@@ -27,7 +28,7 @@ describe('buildReplyStyle', () => {
 
             const result = buildReplyStyle('JohnDoe', null, 'Hello', false, false);
 
-            expect(result.headerLine).toBe('-# ↩︎ **@JohnDoe** test snippet');
+            expect(result.headerLine).toBe('-# ↩︎ Replying to <@JohnDoe> **🡒** [test snippet](null)');
         });
 
         it('should generate generic header when no displayName', () => {
@@ -35,7 +36,7 @@ describe('buildReplyStyle', () => {
 
             const result = buildReplyStyle(null, 'https://discord.com/channels/123/456/789', 'Hello', false, false);
 
-            expect(result.headerLine).toBe('-# ↩︎ test snippet');
+            expect(result.headerLine).toBe('-# ↩︎ Replying **🡒** [test snippet](https://discord.com/channels/123/456/789)');
         });
 
         it('should use createSnippet for content and trim if needed', () => {
@@ -45,10 +46,8 @@ describe('buildReplyStyle', () => {
 
             expect(createSnippet).toHaveBeenCalledWith({
                 content: 'Hello world',
-                embeds: undefined,
-                attachments: undefined,
             });
-            expect(result.headerLine).toBe('-# ↩︎ **@JohnDoe** This is a quote');
+            expect(result.headerLine).toBe('-# ↩︎ Replying to <@JohnDoe> **🡒** [This is a quote](null)');
         });
 
         it('should pass embeds placeholder to createSnippet', () => {
@@ -59,9 +58,8 @@ describe('buildReplyStyle', () => {
             expect(createSnippet).toHaveBeenCalledWith({
                 content: '',
                 embeds: [{} as unknown],
-                attachments: undefined,
             });
-            expect(result.headerLine).toBe('-# ↩︎ **@JohnDoe** [embed]');
+            expect(result.headerLine).toBe('-# ↩︎ Replying to <@JohnDoe> **🡒** [[embed]](null)');
         });
 
         it('should pass attachments placeholder to createSnippet', () => {
@@ -71,17 +69,16 @@ describe('buildReplyStyle', () => {
 
             expect(createSnippet).toHaveBeenCalledWith({
                 content: '',
-                embeds: undefined,
                 attachments: [{} as unknown],
             });
-            expect(result.headerLine).toBe('-# ↩︎ **@JohnDoe** [image]');
+            expect(result.headerLine).toBe('-# ↩︎ Replying to <@JohnDoe> **🡒** [[image]](null)');
         });
 
         it('should trim content if total exceeds 2000 chars', () => {
-            const longSnippet = 'a'.repeat(1950); // Make it long enough to trigger trimming
+            const longSnippet = 'a'.repeat(3000); // Make it long enough to trigger trimming
             vi.mocked(createSnippet).mockReturnValue(longSnippet);
 
-            const result = buildReplyStyle('JohnDoe', null, 'a'.repeat(1950), false, false);
+            const result = buildReplyStyle('JohnDoe', null, 'a'.repeat(3000), false, false);
 
             expect(result.headerLine.length).toBeLessThanOrEqual(2000);
             expect(result.headerLine).toContain('...');
@@ -93,7 +90,7 @@ describe('buildReplyStyle', () => {
 
             const result = buildReplyStyle('JohnDoe', null, 'Hello', false, false);
 
-            expect(result.headerLine).toBe('-# ↩︎ **@JohnDoe** Short quote');
+            expect(result.headerLine).toBe('-# ↩︎ Replying to <@JohnDoe> **🡒** [Short quote](null)');
         });
     });
 });

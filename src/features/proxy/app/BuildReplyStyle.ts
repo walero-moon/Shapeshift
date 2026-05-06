@@ -28,19 +28,21 @@ export function buildReplyStyle(
     if (userId) {
         // Trim content to fit within 2000 chars (header prefix + user + content + hyperlink markup)
         const prefix = `-# ↩︎ Replying to <@${userId}> **🡒** `;
-        const maxContentLength = 2000 - prefix.length - (messageUrl ? 4 : 0); // 4 for `[]()` markdown
+        const suffix = `](${messageUrl})`;
+        const maxContentLength = 2000 - prefix.length - 1 - suffix.length;
         const trimmedContent = snippet.length > maxContentLength
             ? snippet.substring(0, maxContentLength - 3) + '...'
             : snippet;
-        headerText = `${prefix}[${trimmedContent}](${messageUrl})`;
+        headerText = `${prefix}[${trimmedContent}${suffix}`;
     } else {
         // Fallback without user
         const prefix = `-# ↩︎ Replying **🡒** `;
-        const maxContentLength = 2000 - prefix.length - (messageUrl ? 4 : 0);
+        const suffix = `](${messageUrl})`;
+        const maxContentLength = 2000 - prefix.length - 1 - suffix.length;
         const trimmedContent = snippet.length > maxContentLength
             ? snippet.substring(0, maxContentLength - 3) + '...'
             : snippet;
-        headerText = `${prefix}[${trimmedContent}](${messageUrl})`;
+        headerText = `${prefix}[${trimmedContent}${suffix}`;
     }
 
     // For reply-style, we need to allow user mentions in the header
